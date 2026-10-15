@@ -87,14 +87,14 @@ public class SetupActivity extends Activity {
 
     private void continueStartup() {
         TouhouStorage.crashDir(this);
-        if (hasGameData(getDataDir())) {
+        if (hasGameData(getGameDataDir())) {
             launchGame();
             return;
         }
         buildUi();
     }
 
-    private File getDataDir() {
+    private File getGameDataDir() {
         File dir = getExternalFilesDir(null);
         if (dir == null) {
             dir = getFilesDir();
@@ -156,7 +156,7 @@ public class SetupActivity extends Activity {
             startActivityForResult(intent, REQUEST_FOLDER);
         } catch (Exception e) {
             status.setText("No folder picker available on this device.\n\nCopy the files manually to:\n"
-                    + getDataDir().getAbsolutePath());
+                    + getGameDataDir().getAbsolutePath());
         }
     }
 
@@ -178,7 +178,7 @@ public class SetupActivity extends Activity {
             String error = null;
             try {
                 String rootId = DocumentsContract.getTreeDocumentId(tree);
-                copyTree(getContentResolver(), tree, rootId, getDataDir());
+                copyTree(getContentResolver(), tree, rootId, getGameDataDir());
             } catch (Exception e) {
                 error = e.toString();
             }
@@ -190,7 +190,7 @@ public class SetupActivity extends Activity {
     private void onCopyFinished(String error) {
         copying = false;
         pickButton.setEnabled(true);
-        if (error == null && hasGameData(getDataDir())) {
+        if (error == null && hasGameData(getGameDataDir())) {
             launchGame();
             return;
         }
