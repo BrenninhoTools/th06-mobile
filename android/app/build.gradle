@@ -1,0 +1,89 @@
+plugins {
+    id 'com.android.application'
+}
+
+def abiList = (project.findProperty('th06Abis') ?: 'arm64-v8a').split(',')
+
+android {
+    namespace 'com.brenninhotools.th06'
+    compileSdk 35
+    ndkVersion project.findProperty('th06NdkVersion') ?: '27.2.12479018'
+
+    defaultConfig {
+        applicationId 'com.brenninhotools.th06'
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+
+        ndk {
+            abiFilters(*abiList)
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21', '-DCMAKE_BUILD_TYPE=Release'
+                targets 'main', 'SDL2'
+            }
+        }
+    }
+
+    signingConfigs {
+        debugKey {
+            storeFile file("${rootDir}/debug.keystore")
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debugKey
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debugKey
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../../CMakeLists.txt'
+            version project.findProperty('th06CmakeVersion') ?: '3.22.1'
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs += ["${buildDir}/generated/th06-assets"]
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+tasks.register('copyTh06Assets', Copy) {
+    from("${rootDir}/../NotoSans-Regular.ttf")
+    from("${rootDir}/../fonts") {
+        include '*.ttf', '*.otf', '*.ttc'
+    }
+    into "${buildDir}/generated/th06-assets"
+}
+
+preBuild.dependsOn('copyTh06Assets')

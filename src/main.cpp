@@ -7,12 +7,34 @@
 #include "FileSystem.hpp"
 #include "GameErrorContext.hpp"
 #include "GameWindow.hpp"
+#include "Platform.hpp"
 #include "SoundPlayer.hpp"
 #include "Stage.hpp"
 #include "Supervisor.hpp"
+#include "TouchControls.hpp"
 #include "ZunResult.hpp"
 #include "i18n.hpp"
 #include "utils.hpp"
+
+static void HandleControllerHotplug(const SDL_Event &e)
+{
+    if (e.type == SDL_CONTROLLERDEVICEADDED)
+    {
+        if (g_Supervisor.gameController == NULL)
+        {
+            g_Supervisor.gameController = SDL_GameControllerOpen(e.cdevice.which);
+        }
+    }
+    else if (e.type == SDL_CONTROLLERDEVICEREMOVED)
+    {
+        if (g_Supervisor.gameController != NULL &&
+            SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_Supervisor.gameController)) == e.cdevice.which)
+        {
+            SDL_GameControllerClose(g_Supervisor.gameController);
+            g_Supervisor.gameController = NULL;
+        }
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -31,6 +53,13 @@ int main(int argc, char *argv[])
     //    }
 
     //    g_Supervisor.hInstance = hInstance;
+
+    Platform::ApplyHints();
+    if (!Platform::Init() || !Platform::HasGameData())
+    {
+        Platform::ShowMissingDataMessage();
+        return 1;
+    }
 
     if (g_Supervisor.LoadConfig(TH_CONFIG_FILE) != ZUN_SUCCESS)
     {
@@ -52,7 +81,9 @@ int main(int argc, char *argv[])
     //    SystemParametersInfo(SPI_SETPOWEROFFACTIVE, 0, NULL, SPIF_SENDCHANGE);
 
 restart:
+    Platform::ApplyHints();
     GameWindow::CreateGameWindow();
+    Platform::AttachLifecycle();
 
     g_AnmManager = new AnmManager();
 
@@ -87,6 +118,16 @@ restart:
             {
                 goto stop;
             }
+            HandleControllerHotplug(e);
+#if TH06_TOUCH_UI
+            TouchControls::HandleEvent(e);
+#endif
+        }
+
+        if (!Platform::IsActive())
+        {
+            SDL_Delay(50);
+            continue;
         }
 
         renderResult = g_GameWindow.Render();

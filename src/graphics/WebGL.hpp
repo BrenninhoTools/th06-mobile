@@ -2,6 +2,8 @@
 
 #include "GLFunc.hpp"
 #include "GfxInterface.hpp"
+#include "MobilePresenter.hpp"
+#include "Platform.hpp"
 #include <SDL2/SDL.h>
 #include <vector>
 
@@ -79,4 +81,8 @@ struct WebGL : GfxInterface
     GLuint programHandle;
 
     GLint uniforms[UNIFORMS_COUNT];
+
+#if TH06_TOUCH_UI
+    MobilePresenter presenter;
+#endif
 };

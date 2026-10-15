@@ -44,6 +44,8 @@ void GLFuncTable::ResolveFunctions(bool glesContext)
     TRY_RESOLVE_FUNCTION(glTexSubImage2D)
     TRY_RESOLVE_FUNCTION(glVertexPointer)
     TRY_RESOLVE_FUNCTION(glViewport)
+    TRY_RESOLVE_FUNCTION(glDisable)
+    TRY_RESOLVE_FUNCTION(glIsEnabled)
 
     // Ideally, we'd just check for both the regular GL and GLES version of the function and
     //   use whichever doesn't return NULL, but function resolves on GLX are actually context
@@ -84,6 +86,17 @@ void GLFuncTable::ResolveFunctions(bool glesContext)
     TRY_RESOLVE_FUNCTION(glUniformMatrix4fv)
     TRY_RESOLVE_FUNCTION(glUseProgram)
     TRY_RESOLVE_FUNCTION(glVertexAttribPointer)
+
+    TRY_RESOLVE_FUNCTION(glGenFramebuffers)
+    TRY_RESOLVE_FUNCTION(glDeleteFramebuffers)
+    TRY_RESOLVE_FUNCTION(glBindFramebuffer)
+    TRY_RESOLVE_FUNCTION(glFramebufferTexture2D)
+    TRY_RESOLVE_FUNCTION(glCheckFramebufferStatus)
+    TRY_RESOLVE_FUNCTION(glGenRenderbuffers)
+    TRY_RESOLVE_FUNCTION(glDeleteRenderbuffers)
+    TRY_RESOLVE_FUNCTION(glBindRenderbuffer)
+    TRY_RESOLVE_FUNCTION(glRenderbufferStorage)
+    TRY_RESOLVE_FUNCTION(glFramebufferRenderbuffer)
 
     this->isGlesContext = glesContext;
 }

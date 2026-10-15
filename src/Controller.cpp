@@ -5,6 +5,8 @@
 #include <SDL2/SDL_scancode.h>
 
 #include "GameErrorContext.hpp"
+#include "Platform.hpp"
+#include "TouchControls.hpp"
 #include "Supervisor.hpp"
 #include "i18n.hpp"
 #include "utils.hpp"
@@ -385,6 +387,11 @@ u16 Controller::GetInput(void)
     buttons |= KEYBOARD_KEY_PRESSED(TH_BUTTON_Q, SDL_SCANCODE_Q);
     buttons |= KEYBOARD_KEY_PRESSED(TH_BUTTON_S, SDL_SCANCODE_S);
     buttons |= KEYBOARD_KEY_PRESSED(TH_BUTTON_ENTER, SDL_SCANCODE_RETURN);
+    buttons |= KEYBOARD_KEY_PRESSED(TH_BUTTON_MENU, SDL_SCANCODE_AC_BACK);
+
+#if TH06_TOUCH_UI
+    buttons |= TouchControls::GetButtons();
+#endif
 
     return Controller::GetControllerInput(buttons);
 }

@@ -1,87 +1,82 @@
-[![Discord][discord-badge]][discord] <- click here to join discord server.
+# th06-mobile
 
-[discord]: https://discord.gg/VyGwAjrh9a
-[discord-badge]: https://img.shields.io/discord/1147558514840064030?color=%237289DA&logo=discord&logoColor=%23FFFFFF
+Android and iOS port of Touhou Koumakyou ~ the Embodiment of Scarlet Devil (1.02h), built on the
+[GensokyoClub/th06](https://github.com/GensokyoClub/th06) decompilation and its SDL2 + OpenGL ES `portable` branch.
 
-This is the readme for the portable fork of EoSD. For the readme of the decomp project, see [here](https://github.com/GensokyoClub/th06/blob/master/README.md).
+This repository does **not** contain any game assets. You need your own copy of the game.
 
-EoSD-portable is a port of Touhou 6 using SDL2 and OpenGL (with a more general renderer abstraction layer hopefully on the way).
-This enables theoretical portability to any system supported by SDL2, with Linux, Windows, and macOS in particular being known to work.
-Builds for the BSDs and other Unices are also almost certainly possible, but may require some slight modifications to the build system.
+## Features
 
-### Platform Requirements
+- SDL2 + OpenGL ES 2.0 renderer, rendered at 640x480 into an offscreen framebuffer and scaled to the screen with letterboxing
+- On-screen touch controls: floating joystick on the left, SHOT / BOMB / SLOW on the right, MENU / SKIP at the top
+- Bluetooth / USB game controller support with hot-plugging (touch controls hide while a controller is used)
+- Android back button opens the pause menu
+- App pauses rendering and audio when sent to the background
 
-- SDL2, SDL2-image, and SDL2-ttf support
-- C++20 standard library support
-- A little endian architecture (though big endian support is currently being worked on)
-- OpenGL ES 1.1, OpenGL 1.3, or GL 2.1 / GL ES 2.0 / WebGL support
+## Installing the game files
 
-### Dependencies
+Copy every file from your EoSD 1.02h folder (`紅魔郷CM.DAT`, `紅魔郷ED.DAT`, `紅魔郷IN.DAT`, `紅魔郷MD.DAT`,
+`紅魔郷ST.DAT`, `紅魔郷TL.DAT`, and the `bgm` folder if you have it) into the game data folder:
 
-EoSD-portable has the following dependencies:
+| Platform | Data folder |
+| --- | --- |
+| Android | `Android/data/com.brenninhotools.th06/files/` |
+| iOS | the app's folder in the **Files** app (On My iPhone → th06) |
 
-- `SDL2`
-- `SDL2_image`
-- `SDL2_ttf`
-- `libasound` (Optional and Linux-only, enables MIDI support. This will almost always be present as part of a desktop distro.)
+Launch the app once first so the folder is created. A `PUT_GAME_FILES_HERE.txt` file is written there.
 
-On Windows and macOS, MIDI support uses the system APIs and needs no extra dependencies.
+Notes:
 
-In addition, building uses [`premake5`](https://premake.github.io/download) and a compiler that supports C++20.
+- Music uses the WAV soundtrack (`bgm/th06_*.wav`). MIDI playback is not available on mobile.
+- Text uses `msgothic.ttc` or `NotoSansJP-Regular.ttf` from the data folder if present, otherwise a bundled
+  or system Japanese font.
+- Japanese file names are required. English-patched file names are not supported.
 
-#### Building
+## Building
 
-In the repository root directory, run `premake5` with the desired build system as an argument (a list can be seen by running `premake5 --help`).
-This will output the build files to the `build` directory, and then compilation may be done with the desired build system.
+All mobile builds use CMake and download SDL2, SDL2_image and SDL2_ttf automatically.
 
-##### Build Options (Use with Premake Invocation)
-`--no-asoundlib`: On Linux, doesn't build MIDI support. Removes libasound as a dev and runtime dependency
-`--use-c23-embed`: Uses `#embed` for resource inclusion instead of a lua script in the Premake file.
+### Android
 
-##### Build Example (Debian-based Linux)
+Requirements: JDK 17, Android SDK with NDK, Gradle 8.9+.
 
-Obtain dependencies:
+```sh
+cd android
+gradle assembleRelease -Pth06Abis=arm64-v8a
+```
 
-`sudo apt install build-essential libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libasound2-dev`
+The APK is written to `android/app/build/outputs/apk/release/`. Optional Gradle properties:
+`th06Abis` (comma separated ABIs), `th06NdkVersion`, `th06CmakeVersion`.
 
-Generate makefile:
+### iOS
 
-`premake5 gmake`
+Requirements: macOS with Xcode and Ninja.
 
-Compile:
+```sh
+cmake -S . -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ios --target th06
+```
 
-`cd build && make -j16`
+The resulting `th06.app` is unsigned. Put it in a `Payload` folder and zip it as `.ipa` to sideload it
+(AltStore, Sideloadly, TrollStore).
 
-##### Build Example (macOS)
+### Desktop
 
-Install the Xcode Command Line Tools (provides the compiler), if not already present:
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
 
-`xcode-select --install`
+Uses the system SDL2, SDL2_image and SDL2_ttf (or pass `-DTH06_VENDORED_SDL=ON`).
+`-DTH06_FORCE_MOBILE_UI=ON` enables the mobile renderer and touch controls on desktop for testing
+(mouse clicks act as touches). The original `premake5.lua` from the portable branch is kept as well.
 
-Obtain dependencies (using [Homebrew](https://brew.sh)):
+## CI
 
-`brew install premake sdl2 sdl2_image sdl2_ttf`
+`.github/workflows/mobile.yml` builds an arm64 Android APK and an unsigned arm64 iOS IPA on every push to `master`.
+Both jobs run in parallel and use ccache.
 
-Generate makefile:
+## Credits
 
-`premake5 gmake`
-
-Compile:
-
-`cd build && make -j16`
-
-### Use
-
-EoSD-portable is designed to be a drop-in replacement for the vanilla EoSD binary.
-You will also need to add a font to your game directory with the filename `msgothic.ttc`.
-This may be the actual MS Gothic, taken from a Windows machine, or a compatible font such as Kochi Gothic.
-EoSD-portable uses the Japanese filenames (e.g. 紅魔郷CM.DAT, 東方紅魔郷.cfg). English and other patches, static or thcrap, do not currently work.
-A Japanese locale is not required.
-
-# Decomp Credits
-
-We would like to extend our thanks to the following individuals for their
-invaluable contributions:
-
-- @EstexNT for porting the [`var_order` pragma](scripts/pragma_var_order.cpp) to
-  MSVC7.
+- [GensokyoClub/th06](https://github.com/GensokyoClub/th06) for the decompilation and the portable SDL2 port
+- [SDL](https://libsdl.org) for the platform layer

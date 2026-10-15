@@ -7,6 +7,9 @@
 #include "thirdparty/sjis_converter.h"
 
 #include <SDL2/SDL_ttf.h>
+#include <string>
+
+#include "Platform.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -30,6 +33,37 @@ TextHelper::~TextHelper()
 
 #define TEXT_BUFFER_HEIGHT 64
 
+static TTF_Font *OpenGameFont()
+{
+    const std::string candidates[] = {
+        Platform::DataPath(TH_PRIMARY_FONT_FILENAME),
+        Platform::DataPath(TH_FALLBACK_FONT_FILENAME),
+        TH_FALLBACK_FONT_FILENAME,
+#if defined(__ANDROID__)
+        "/system/fonts/NotoSansCJK-Regular.ttc",
+        "/system/fonts/NotoSansJP-Regular.otf",
+        "/system/fonts/DroidSansJapanese.ttf",
+        "/system/fonts/DroidSansFallbackFull.ttf",
+        "/system/fonts/DroidSansFallback.ttf",
+#elif TH06_MOBILE
+        "/System/Library/Fonts/Core/HiraginoSans-W3.ttc",
+        "/System/Library/Fonts/Cache/HiraginoSans-W3.ttc",
+        "/System/Library/Fonts/Core/PingFang.ttc",
+#endif
+        "NotoSans-Regular.ttf",
+    };
+
+    for (const std::string &candidate : candidates)
+    {
+        TTF_Font *font = TTF_OpenFont(candidate.c_str(), 10);
+        if (font != NULL)
+        {
+            return font;
+        }
+    }
+    return NULL;
+}
+
 // Extended to initialize all globals for text helper
 ZunResult TextHelper::CreateTextBuffer()
 {
@@ -37,8 +71,8 @@ ZunResult TextHelper::CreateTextBuffer()
 
     // Primary font is MSゴシック, which is nonfree and has to be taken from a Windows install
     // Fallback is Noto Sans Regular (JP) which is redistributable
-    if ((g_Font = TTF_OpenFont(TH_PRIMARY_FONT_FILENAME, 10), g_Font == NULL) &&
-        (std::printf("%s\n", TTF_GetError()), g_Font = TTF_OpenFont(TH_FALLBACK_FONT_FILENAME, 10), g_Font == NULL))
+    g_Font = OpenGameFont();
+    if (g_Font == NULL)
     {
         std::printf("%s\n", TTF_GetError());
 

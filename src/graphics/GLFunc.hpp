@@ -1,6 +1,15 @@
 #pragma once
 
+#include <SDL2/SDL_platform.h>
+
+#if defined(__IPHONEOS__)
+#pragma push_macro("__IPHONEOS__")
+#undef __IPHONEOS__
 #include <SDL2/SDL_opengl.h>
+#pragma pop_macro("__IPHONEOS__")
+#else
+#include <SDL2/SDL_opengl.h>
+#endif
 
 // Function pointers for OpenGL functions used in EoSD. This is necessary because Windows
 //   opengl32 only goes up to OpenGL 1.1 and some of the blending parameters we need are
@@ -54,6 +63,8 @@ struct GLFuncTable
                                       GLsizei height, GLenum format, GLenum type, const GLvoid *pixels);
     void(GLAPIENTRY *glVertexPointer)(GLint size, GLenum type, GLsizei stride, const GLvoid *ptr);
     void(GLAPIENTRY *glViewport)(GLint x, GLint y, GLsizei width, GLsizei height);
+    void(GLAPIENTRY *glDisable)(GLenum cap);
+    GLboolean(GLAPIENTRY *glIsEnabled)(GLenum cap);
 
     // GL(ES) 2.X / WebGL
     PFNGLATTACHSHADERPROC glAttachShader;
@@ -78,6 +89,17 @@ struct GLFuncTable
     PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
     PFNGLUSEPROGRAMPROC glUseProgram;
     PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
+
+    PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
+    PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers;
+    PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
+    PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D;
+    PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus;
+    PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers;
+    PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers;
+    PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer;
+    PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage;
+    PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
 
   private:
     // GLES forms for cases where they're different

@@ -41,14 +41,19 @@ GLuint createShader(const char *source, GLenum type, const char *descString, boo
     // This adds a preamble which is slightly different between ES 2.0 and 2.1.
     if (glesContext)
     {
-        fullShaderSource[0] = "#version 100\n"
-                              "precision mediump float;\n";
+        fullShaderSource[0] = "#version 100\n";
 
-        if (SDL_GL_ExtensionSupported("GL_EXT_frag_depth"))
+        if (type == GL_FRAGMENT_SHADER && SDL_GL_ExtensionSupported("GL_EXT_frag_depth"))
         {
             fullShaderSource[shaderSourceIndex++] = "#extension GL_EXT_frag_depth : require\n";
             fullShaderSource[shaderSourceIndex++] = "#define USE_FRAG_DEPTH\n";
         }
+
+        fullShaderSource[shaderSourceIndex++] = "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+                                                "precision highp float;\n"
+                                                "#else\n"
+                                                "precision mediump float;\n"
+                                                "#endif\n";
     }
     else
     {
@@ -159,6 +164,16 @@ GfxInterface *WebGL::Create()
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
+#if TH06_MOBILE
+    flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_BORDERLESS;
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+#elif TH06_TOUCH_UI
+    flags |= SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
+
     SDL_Window *window = SDL_CreateWindow(TH_WINDOW_TITLE, x, y, width, height, flags);
     interface->window = window;
     if (window == NULL)
@@ -201,11 +216,26 @@ GfxInterface *WebGL::Create()
         return NULL;
     }
 
+#if TH06_TOUCH_UI
+    if (!interface->presenter.Init(window, interface->glesContext, GAME_WINDOW_WIDTH_REAL, GAME_WINDOW_HEIGHT_REAL))
+    {
+        delete interface;
+        return NULL;
+    }
+    g_glFuncTable.glUseProgram(interface->programHandle);
+#endif
+
     return interface;
 }
 
 void WebGL::Exit()
 {
+#if TH06_TOUCH_UI
+    if (this->glContext)
+    {
+        this->presenter.Release();
+    }
+#endif
     if (this->glContext)
     {
         SDL_GL_DeleteContext(this->glContext);
@@ -556,5 +586,9 @@ void WebGL::Draw(PrimitiveType type, i32 start, i32 count)
 
 void WebGL::SwapBuffers()
 {
+#if TH06_TOUCH_UI
+    this->presenter.Present(this->programHandle);
+#else
     SDL_GL_SwapWindow(window);
+#endif
 }

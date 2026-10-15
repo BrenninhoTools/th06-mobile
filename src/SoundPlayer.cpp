@@ -1,3 +1,4 @@
+#include "Platform.hpp"
 #include "SoundPlayer.hpp"
 
 #include "FileSystem.hpp"
@@ -87,7 +88,10 @@ fail:
 ZunResult SoundPlayer::Release(void)
 {
     this->terminateFlag = true;
-    this->backgroundMusicThreadHandle.join();
+    if (this->backgroundMusicThreadHandle.joinable())
+    {
+        this->backgroundMusicThreadHandle.join();
+    }
     this->terminateFlag = false;
 
     StopBGM();
@@ -154,7 +158,7 @@ ZunResult SoundPlayer::LoadWav(const char *path)
 
     utils::DebugPrint2("load BGM\n");
 
-    fileStream = SDL_RWFromFile(path, "r");
+    fileStream = SDL_RWFromFile(Platform::DataPath(path).c_str(), "rb");
 
     if (fileStream == NULL)
     {
