@@ -1,9 +1,8 @@
 #pragma once
-#include "decomp.hpp"
+
+#include "inttypes.hpp"
 #include "pbg3/Pbg3Parser.hpp"
 
-namespace th06
-{
 struct Pbg3Entry
 {
     u32 unk1;
@@ -13,7 +12,6 @@ struct Pbg3Entry
     u32 checksum;
     char filename[256];
 };
-ZUN_ASSERT_SIZE(Pbg3Entry, 0x114);
 
 class Pbg3Archive
 {
@@ -21,10 +19,10 @@ class Pbg3Archive
     Pbg3Archive();
     ~Pbg3Archive();
 
-    BOOL Release();
+    i32 Release();
 
-    BOOL Load(const char *path);
-    BOOL ParseHeader();
+    i32 Load(const char *path);
+    i32 ParseHeader();
     i32 FindEntry(const char *path);
     u32 GetEntrySize(u32 entryIdx);
     u8 *ReadEntryRaw(u32 *outSize, u32 *outChecksum, i32 entryIdx);
@@ -37,5 +35,5 @@ class Pbg3Archive
     u32 fileTableOffset;
     Pbg3Entry *entries;
 };
-ZUN_ASSERT_SIZE(Pbg3Archive, 0x14);
-} // namespace th06
+
+extern Pbg3Archive **g_Pbg3Archives;

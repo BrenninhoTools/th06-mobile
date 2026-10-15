@@ -1,16 +1,15 @@
 #pragma once
-#include <Windows.h>
-#include <d3d8types.h>
-#include <string.h>
+
+// #include <Windows.h>
+// #include <d3d8types.h>
+// #include <string.h>
 
 #include "Chain.hpp"
-#include "Supervisor.hpp"
+#include "ZunColor.hpp"
 #include "ZunResult.hpp"
 #include "ZunTimer.hpp"
-#include "decomp.hpp"
+#include "inttypes.hpp"
 
-namespace th06
-{
 struct ZunRect
 {
     f32 left;
@@ -28,10 +27,29 @@ enum ScreenEffects
 
 struct ScreenEffect
 {
+    // In fade effects, effectParam1 is an RGB color to fade to
+    // In shake effects, effectParam1 controls the "base" view offset, and effectParam2 controls the shakiness
+    // multiplier over time
+    static ScreenEffect *RegisterChain(i32 effect, u32 ticks, u32 effectParam1, u32 effectParam2,
+                                       u32 unusedEffectParam);
+
+    static ZunResult AddedCallback(ScreenEffect *effect);
+    static ZunResult DeletedCallback(ScreenEffect *effect);
+
+    static ChainCallbackResult DrawFadeIn(ScreenEffect *effect);
+    static ChainCallbackResult CalcFadeIn(ScreenEffect *effect);
+    static ChainCallbackResult ShakeScreen(ScreenEffect *effect);
+    static ChainCallbackResult DrawFadeOut(ScreenEffect *effect);
+    static ChainCallbackResult CalcFadeOut(ScreenEffect *effect);
+
+    static void DrawSquare(const ZunRect *rect, ZunColor rectColor);
+    static void Clear(ZunColor color);
+    static void SetViewport(ZunColor color);
+
     ScreenEffects usedEffect;
     ChainElem *calcChainElement;
     ChainElem *drawChainElement;
-    unreferenced_fields(0x4);
+    u32 unused;
     i32 fadeAlpha;
     i32 effectLength;
     i32 genericParam;   // effectParam1
@@ -39,16 +57,3 @@ struct ScreenEffect
     i32 unusedParam;
     ZunTimer timer;
 };
-ZUN_ASSERT_TYPE(ScreenEffect, 0x30, 4);
-
-// In fade effects, effectParam1 is an RGB color to fade to
-// In shake effects, effectParam1 controls the "base" view offset, and effectParam2 controls the shakiness
-// multiplier over time
-ScreenEffect *ScreenEffect_RegisterChain(i32 effect, u32 ticks, u32 effectParam1, u32 effectParam2,
-                                         u32 unusedEffectParam);
-
-void ScreenEffect_DrawSquare(ZunRect *rect, D3DCOLOR rectColor);
-void ScreenEffect_Clear(D3DCOLOR color);
-void ScreenEffect_SetViewport(D3DCOLOR color);
-
-} // namespace th06

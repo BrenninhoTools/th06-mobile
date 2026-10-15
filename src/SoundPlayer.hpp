@@ -1,13 +1,13 @@
 #pragma once
-#include <Windows.h>
 
-#include "Global.hpp"
 #include "ZunResult.hpp"
-#include "decomp.hpp"
-#include "zwave.hpp"
+#include "inttypes.hpp"
+#include <SDL2/SDL_audio.h>
+#include <SDL2/SDL_rwops.h>
+#include <atomic>
+#include <mutex>
+#include <thread>
 
-namespace th06
-{
 enum SoundIdx
 {
     NO_SOUND = -1,
@@ -45,68 +45,66 @@ enum SoundIdx
     SOUND_POWERUP = 31,
 };
 
-struct SoundEffectData
+struct SoundBufferIdxVolume
 {
     i32 bufferIdx;
     i16 volume;
-    i16 unk;
 };
-ZUN_ASSERT_TYPE(SoundEffectData, 0x8, 4);
 
-// This is more than the actual number of sound effects
-#define SOUND_EFFECT_COUNT 128
+struct SoundData
+{
+    i16 *samples;
+    u32 pos;
+    u32 len;
+    bool isPlaying;
+};
+
+struct WavData
+{
+    SDL_RWops *fileStream;
+    u32 dataStartOffset;
+    u32 samples;
+};
+
+struct MusicStream
+{
+    WavData srcWav;
+    u32 pos;
+    u32 loopStart;
+    u32 loopEnd;
+    u32 fadeoutLen;
+    u32 fadeoutProgress;
+};
 
 struct SoundPlayer
 {
-    SoundPlayer()
-    {
-        BSS_ZERO_INIT(memset(this, 0, sizeof(SoundPlayer)));
-        for (i32 i = 0; i < SOUND_EFFECT_COUNT; i++)
-        {
-            this->unk408[i] = -1;
-        }
-    }
+    SoundPlayer();
 
-    ZunResult InitializeDSound(HWND window);
+    ZunResult InitializeDSound();
     ZunResult InitSoundBuffers();
     ZunResult Release(void);
 
-    ZunResult LoadSound(i32 idx, const char *path);
+    ZunResult LoadSound(i32 idx, const char *path, f32 volumeMultiplier);
     void PlaySounds();
-    void PlaySoundByIdx(SoundIdx idx, i32 unused = 0);
-    ZunResult PlayBGM(BOOL isLooping);
+    void PlaySoundByIdx(SoundIdx idx);
+    ZunResult PlayBGM(bool isLooping);
     void StopBGM();
-    void FadeOut(float seconds)
-    {
-        if (this->backgroundMusic != NULL)
-        {
-            this->backgroundMusic->StartFadeOut(seconds);
-        }
-    }
+    void FadeOut(f32 seconds);
 
-    ZunResult LoadWav(char *path);
+    ZunResult LoadWav(const char *path);
     ZunResult LoadPos(const char *path);
 
-    LPDIRECTSOUND dsoundHdl;
-    unreferenced_fields(0x4); // possibly LPDIRECTSOUNDBUFFER primarySoundBuffer based on PBG code and later games
-    LPDIRECTSOUNDBUFFER soundBuffers[SOUND_EFFECT_COUNT];
-    LPDIRECTSOUNDBUFFER duplicateSoundBuffers[SOUND_EFFECT_COUNT];
-    i32 unk408[SOUND_EFFECT_COUNT];
-    LPDIRECTSOUNDBUFFER initSoundBuffer;
-    HWND gameWindow;
-    CSoundManager *manager;
-    DWORD backgroundMusicThreadId;
-    HANDLE backgroundMusicThreadHandle;
-    unreferenced_fields(0x4);
+    void BackgroundMusicPlayerThread();
+    void MixAudio(u32 samples);
+
+    SoundData soundBuffers[128];
+    std::mutex soundBufMutex;
+    SDL_AudioDeviceID audioDev;
+    std::thread backgroundMusicThreadHandle;
+    std::atomic_bool terminateFlag;
     i32 soundBuffersToPlay[3];
-    CStreamingSound *backgroundMusic;
-    HANDLE backgroundMusicUpdateEvent;
-    BOOL isLooping;
+    MusicStream backgroundMusic;
+    bool isLooping;
 };
 
-ZUN_ASSERT_TYPE(SoundPlayer, 0x638, 4);
-
-extern SoundEffectData g_SoundBufferIdxVol[32];
-extern const char *g_SFXList[26];
 extern SoundPlayer g_SoundPlayer;
-} // namespace th06

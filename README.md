@@ -1,125 +1,87 @@
-# 東方紅魔郷　～ the Embodiment of Scarlet Devil
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resources/progress_dark.svg">
-  <img alt="Decomp Progress" src="resources/progress.svg">
-</picture>
-
 [![Discord][discord-badge]][discord] <- click here to join discord server.
 
 [discord]: https://discord.gg/VyGwAjrh9a
 [discord-badge]: https://img.shields.io/discord/1147558514840064030?color=%237289DA&logo=discord&logoColor=%23FFFFFF
 
-This project aims to perfectly reconstruct the source code of [Touhou Koumakyou ~ the Embodiment of Scarlet Devil 1.02h](https://en.touhouwiki.net/wiki/Embodiment_of_Scarlet_Devil) by Team Shanghai Alice.
+This is the readme for the portable fork of EoSD. For the readme of the decomp project, see [here](https://github.com/GensokyoClub/th06/blob/master/README.md).
 
-For a functioning port of the game to other platforms (Linux, modern Windows, etc), see [the portable branch](https://github.com/GensokyoClub/th06/tree/portable)
+EoSD-portable is a port of Touhou 6 using SDL2 and OpenGL (with a more general renderer abstraction layer hopefully on the way).
+This enables theoretical portability to any system supported by SDL2, with Linux, Windows, and macOS in particular being known to work.
+Builds for the BSDs and other Unices are also almost certainly possible, but may require some slight modifications to the build system.
 
-## Installation
+### Platform Requirements
 
-### Executable
-
-This project requires the original `東方紅魔郷.exe` version 1.02h (SHA256 hashsum 9f76483c46256804792399296619c1274363c31cd8f1775fafb55106fb852245, you can check hashsum on windows with command `certutil -hashfile <path-to-your-file> SHA256`.)
-
-Copy `東方紅魔郷.exe` to `resources/th06.exe`.
+- SDL2, SDL2-image, and SDL2-ttf support
+- C++20 standard library support
+- A little endian architecture (though big endian support is currently being worked on)
+- OpenGL ES 1.1, OpenGL 1.3, or GL 2.1 / GL ES 2.0 / WebGL support
 
 ### Dependencies
 
-The build system has the following package requirements:
+EoSD-portable has the following dependencies:
 
-- `python3` >= 3.4
-- `msiextract` (On linux/macos only)
-- `wine` (on linux/macos only, prefer CrossOver on macOS to avoid possible CL.EXE heap issues)
-- `aria2c` (optional, allows for torrent downloads, will automatically install on Windows if selected.)
+- `SDL2`
+- `SDL2_image`
+- `SDL2_ttf`
+- `libasound` (Optional and Linux-only, enables MIDI support. This will almost always be present as part of a desktop distro.)
 
-The rest of the build system is constructed out of Visual Studio 2002 and DirectX 8.0 from the Web Archive.
+On Windows and macOS, MIDI support uses the system APIs and needs no extra dependencies.
 
-#### Configure devenv
-
-This will download and install compiler, libraries, and other tools.
-
-If you are on windows, and for some reason want to download dependencies manually,
-run this command to get the list of files to download:
-
-```
-python scripts/create_devenv.py scripts/dls scripts/prefix --no-download
-```
-
-But if you want everything to be downloaded automatically, run it like this instead:
-
-```
-python scripts/create_devenv.py scripts/dls scripts/prefix
-```
-
-And if you want to use torrent to download those dependencies, use this:
-
-```
-python scripts/create_devenv.py scripts/dls scripts/prefix --torrent
-```
-
-On linux and mac, run the following script:
-```bash
-# NOTE: On macOS if you use CrossOver.
-# export WINE=<CrossOverPath>/wine
-./scripts/create_th06_prefix
-```
+In addition, building uses [`premake5`](https://premake.github.io/download) and a compiler that supports C++20.
 
 #### Building
 
-Run the following script:
+In the repository root directory, run `premake5` with the desired build system as an argument (a list can be seen by running `premake5 --help`).
+This will output the build files to the `build` directory, and then compilation may be done with the desired build system.
 
-```
-python3 ./scripts/build.py
-```
+##### Build Options (Use with Premake Invocation)
+`--no-asoundlib`: On Linux, doesn't build MIDI support. Removes libasound as a dev and runtime dependency
+`--use-c23-embed`: Uses `#embed` for resource inclusion instead of a lua script in the Premake file.
 
-This will automatically generate a ninja build script `build.ninja`, and run
-ninja on it.
+##### Build Example (Debian-based Linux)
 
-## Contributing
+Obtain dependencies:
 
-### Reverse Engineering
+`sudo apt install build-essential libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libasound2-dev`
 
-You can find an XML export of our Ghidra RE in the companion repository
-[th06-re], in the `xml` branch. This repo is updated nightly through
-[`scripts/export_ghidra_database.py`], and its history matches the checkin
-history from our team's Ghidra Server.
+Generate makefile:
 
-If you wish to help us in our Reverse Engineering effort, please contact
-@roblabla on discord so we can give you an account on the Ghidra Server.
+`premake5 gmake`
 
-### Diffing
+Compile:
 
-In order to contribute to the decompilation, you are going to need reccmp
-([Instructions](https://github.com/isledecomp/reccmp/tree/master?tab=readme-ov-file#getting-started)).
+`cd build && make -j16`
 
-In the project root, run:
+##### Build Example (macOS)
 
-```bash
-reccmp-project detect --search-path resources/
-```
+Install the Xcode Command Line Tools (provides the compiler), if not already present:
 
-Build the recompiled executable if you have not done so (see
-the above section). Then, in the `build/` directory, run:
+`xcode-select --install`
 
-```bash
-reccmp-project detect --what recompiled
-```
+Obtain dependencies (using [Homebrew](https://brew.sh)):
 
-To generate a report of the differences between the original and recompiled
-binaries, again in the `build/` directory, run:
+`brew install premake sdl2 sdl2_image sdl2_ttf`
 
-```bash
-reccmp-reccmp --target th06 --html report.html
-```
+Generate makefile:
 
-This will display a report of the accuracy to the original binary, and export
-this report to a HTML file `report.html`.
+`premake5 gmake`
 
-# Credits
+Compile:
+
+`cd build && make -j16`
+
+### Use
+
+EoSD-portable is designed to be a drop-in replacement for the vanilla EoSD binary.
+You will also need to add a font to your game directory with the filename `msgothic.ttc`.
+This may be the actual MS Gothic, taken from a Windows machine, or a compatible font such as Kochi Gothic.
+EoSD-portable uses the Japanese filenames (e.g. 紅魔郷CM.DAT, 東方紅魔郷.cfg). English and other patches, static or thcrap, do not currently work.
+A Japanese locale is not required.
+
+# Decomp Credits
 
 We would like to extend our thanks to the following individuals for their
 invaluable contributions:
 
 - @EstexNT for porting the [`var_order` pragma](scripts/pragma_var_order.cpp) to
   MSVC7.
-
-[th06-re]: https://github.com/happyhavoc/th06-re

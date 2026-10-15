@@ -1,16 +1,14 @@
 #pragma once
-#include <Windows.h>
-#include <d3d8.h>
-#include <d3dx8math.h>
+
+// #include <Windows.h>
+// #include <d3d8.h>
+// #include <d3dx8math.h>
 
 #include "Chain.hpp"
-#include "Global.hpp"
 #include "ResultScreen.hpp"
 #include "ZunResult.hpp"
-#include "decomp.hpp"
+#include "inttypes.hpp"
 
-namespace th06
-{
 enum Difficulty
 {
     EASY,
@@ -22,24 +20,31 @@ enum Difficulty
 
 enum StageNumber
 {
-    DummyStage,
-    Stage1,
-    Stage2,
-    Stage3,
-    Stage4,
-    Stage5,
-    Stage6,
-    ExtraStage,
+    STAGE1,
+    STAGE2,
+    STAGE3,
+    STAGE4,
+    STAGE5,
+    FINAL_STAGE,
+    EXTRA_STAGE,
 };
 
-#define STAGE_COUNT 7
-#define MAIN_GAME_STAGE_COUNT (MAIN_GAME_STAGE_COUNT - 1)
+#define PSCR_NUM_CHARS_SHOTTYPES 4
+#define PSCR_NUM_STAGES 6
+#define PSCR_NUM_DIFFICULTIES 4
 
-#define STAGE_INDEX(num) ((num) - 1)
+#define CLRD_NUM_CHARACTERS 4
 
-#define MAX_POWER 128
+#define CATK_NUM_CAPTURES 64
 
-#define MAX_CONTINUE_CREDITS 3
+#define GAME_REGION_TOP 16.0
+#define GAME_REGION_LEFT 32.0
+
+#define GAME_REGION_WIDTH 384.0
+#define GAME_REGION_HEIGHT 448.0
+
+#define GAME_REGION_RIGHT (GAME_REGION_LEFT + GAME_REGION_WIDTH)
+#define GAME_REGION_BOTTOM (GAME_REGION_TOP + GAME_REGION_HEIGHT)
 
 struct GameManager;
 
@@ -47,33 +52,28 @@ extern GameManager g_GameManager;
 struct GameManager
 {
     GameManager();
+    static ZunResult RegisterChain();
+    static void CutChain();
+    static ChainCallbackResult OnUpdate(GameManager *gameManager);
+    static ChainCallbackResult OnDraw(GameManager *gameManager);
+    static ZunResult AddedCallback(GameManager *gameManager);
+    static ZunResult DeletedCallback(GameManager *gameManager);
+    static void SetupCamera(f32);
+    static void SetupCameraStageBackground(f32);
 
-    ZunBool HasExtraUnlocked(i32 character, i32 shottype)
-    {
-        return this->clrd[shottype + character * SHOTTYPES_PER_CHARACTER].stagesClearedWithoutContinues[NORMAL] ==
-                   ALL_CLEARED ||
-               this->clrd[shottype + character * SHOTTYPES_PER_CHARACTER].stagesClearedWithoutContinues[HARD] ==
-                   ALL_CLEARED ||
-               this->clrd[shottype + character * SHOTTYPES_PER_CHARACTER].stagesClearedWithoutContinues[LUNATIC] ==
-                   ALL_CLEARED;
-    }
+    i32 HasReachedMaxClears(i32 character, i32 shottype) const;
     void IncreaseSubrank(i32 amount);
     void DecreaseSubrank(i32 amount);
-    ZunBool IsInBounds(f32 x, f32 y, f32 width, f32 height);
+    i32 IsInBounds(f32 x, f32 y, f32 width, f32 height) const;
 
     void AddScore(i32 points)
     {
         this->score += points;
     }
 
-    i32 RankLerpInt(i32 minVal, i32 maxVal)
+    static i32 CharacterShotType()
     {
-        return this->rank * (maxVal - minVal) / 32 + minVal;
-    }
-
-    float RankLerpFloat(float minVal, float maxVal)
-    {
-        return this->rank * (maxVal - minVal) / 32.0f + minVal;
+        return g_GameManager.shotType + g_GameManager.character * 2;
     }
 
     u32 guiScore;
@@ -83,24 +83,24 @@ struct GameManager
     Difficulty difficulty;
     i32 grazeInStage;
     i32 grazeInTotal;
-    ZunBool isInReplay;
+    u32 isInReplay;
     i32 deaths;
     i32 bombsUsed;
     i32 spellcardsCaptured;
     i8 isTimeStopped;
-    alignment_padding(0x3);
-    Catk catk[CATK_COUNT];
-    Clrd clrd[SHOTTYPE_COUNT];
-    Pscr pscr[SHOTTYPE_COUNT][PSCR_NUM_STAGES][PSCR_NUM_DIFFICULTIES];
+    Catk catk[CATK_NUM_CAPTURES];
+    Clrd clrd[CLRD_NUM_CHARACTERS];
+    Pscr pscr[PSCR_NUM_CHARS_SHOTTYPES][PSCR_NUM_STAGES][PSCR_NUM_DIFFICULTIES];
     u16 currentPower;
-    unreferenced_fields(0x2);
+    i8 unk_1812;
+    i8 unk_1813;
     u16 pointItemsCollectedInStage;
     u16 pointItemsCollected;
-    u8 continuesUsed;
+    u8 numRetries;
     i8 powerItemCountForScore;
     i8 livesRemaining;
     i8 bombsRemaining;
-    i8 livesEarned;
+    i8 extraLives;
     u8 character;
     u8 shotType;
     u8 isInGameMenu;
@@ -109,33 +109,25 @@ struct GameManager
     u8 isGameCompleted;
     u8 isInPracticeMode;
     u8 demoMode;
-    alignment_padding(0x3);
+    i8 unk_1825;
+    i8 unk_1826;
+    i8 unk_1827;
     i32 demoFrames;
-    char replayFile[256];
-    unused_array_field(char, 256);
+    i8 replayFile[256];
+    i8 unk_192c[256];
     u16 randomSeed;
     u32 gameFrames;
     i32 currentStage;
     u32 menuCursorBackup;
-    ZunVec2 gameRegionScreenPos;
-    ZunVec2 gameRegionSize;
+    ZunVec2 arcadeRegionTopLeftPos;
+    ZunVec2 arcadeRegionSize;
     ZunVec2 playerMovementAreaTopLeftPos;
     ZunVec2 playerMovementAreaSize;
     f32 cameraDistance;
-    D3DXVECTOR3 stageCameraFacingDir;
+    ZunVec3 stageCameraFacingDir;
     i32 counat;
     i32 rank;
     i32 maxRank;
     i32 minRank;
     i32 subRank;
 };
-
-#define CURRENT_SHOTTYPE() SHOTTYPE_ID(g_GameManager.character, g_GameManager.shotType)
-
-ZunResult GameManager_RegisterChain();
-void GameManager_CutChain();
-void SetupCamera(f32 extraRenderDistance);
-void SetupCameraStageBackground(f32 extraRenderDistance);
-
-ZUN_ASSERT_TYPE(GameManager, 0x1a80, 4);
-} // namespace th06

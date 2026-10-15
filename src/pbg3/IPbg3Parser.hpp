@@ -1,9 +1,7 @@
 #pragma once
-#include "decomp.hpp"
-#include <Windows.h>
 
-namespace th06
-{
+#include "inttypes.hpp"
+
 class IPbg3Parser
 {
   public:
@@ -14,14 +12,13 @@ class IPbg3Parser
     void Reset();
     u32 ReadVarInt();
     u32 ReadMagic();
-    BOOL ReadString(char *out, u32 maxSize);
-    virtual BOOL ReadBit() = 0;
+    u32 ReadString(char *out, u32 maxSize);
+    virtual i32 ReadBit() = 0;
     virtual u32 ReadInt(u32 numBitsAsPowersOf2) = 0;
-    virtual i32 ReadByte() = 0;
-    virtual BOOL SeekToOffset(u32 fileOffset) = 0;
-    virtual BOOL SeekToNextByte() = 0;
-    virtual BOOL ReadByteAlignedData(u8 *data, u32 bytesToRead) = 0;
-    virtual BOOL GetLastWriteTime(LPFILETIME lastWriteTime) = 0;
+    virtual i32 ReadByteAssumeAligned() = 0;
+    virtual i32 SeekToOffset(u32 fileOffset) = 0;
+    virtual i32 SeekToNextByte() = 0;
+    virtual i32 ReadByteAlignedData(u8 *data, u32 bytesToRead) = 0;
     virtual ~IPbg3Parser()
     {
     }
@@ -33,4 +30,3 @@ class IPbg3Parser
     u8 bitIdxInCurByte;
     u32 crc;
 };
-} // namespace th06

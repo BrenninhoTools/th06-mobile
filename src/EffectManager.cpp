@@ -1,31 +1,59 @@
-#include "stdafx.h"
-
 #include "EffectManager.hpp"
 
-#include "ChainPriorities.hpp"
+#include <cmath>
 
-namespace th06
-{
-inline EffectManager::EffectManager()
+#include "AnmManager.hpp"
+#include "Chain.hpp"
+#include "ChainPriorities.hpp"
+#include "GameManager.hpp"
+#include "Rng.hpp"
+#include "ZunResult.hpp"
+#include "utils.hpp"
+
+EffectManager g_EffectManager;
+
+static ChainElem g_EffectManagerCalcChain;
+static ChainElem g_EffectManagerDrawChain;
+
+static const EffectInfo g_Effects[20] = {
+    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_SMALL, NULL},
+    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_SPIRAL, NULL},
+    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_NORMAL, NULL},
+    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_1, EffectManager::EffectCallbackRandomSplashBig},
+    {ANM_SCRIPT_BULLET4_SPAWN_WHITE_PARTICLE, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_RED_PARTICLE, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_GREEN_PARTICLE, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_BLUE_PARTICLE, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_WHITE_PARTICLE_SMALL, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_RED_PARTICLE_SMALL, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_GREEN_PARTICLE_SMALL, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SPAWN_BLUE_PARTICLE_SMALL, EffectManager::EffectCallbackRandomSplash},
+    {ANM_SCRIPT_BULLET4_SCRIPT_17, NULL},
+    {ANM_SCRIPT_BULLET4_SCRIPT_18, EffectManager::EffectUpdateCallback4},
+    {ANM_SCRIPT_BULLET4_SCRIPT_18, EffectManager::EffectUpdateCallback4},
+    {ANM_SCRIPT_BULLET4_SCRIPT_18, EffectManager::EffectUpdateCallback4},
+    {ANM_SCRIPT_EFFECTS_SPELLCARD_BACKGROUND, NULL},
+    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_2, EffectManager::EffectCallbackAttract},
+    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_3, EffectManager::EffectCallbackAttractSlow},
+    {ANM_SCRIPT_BULLET4_SCRIPT_19, EffectManager::EffectCallbackStill},
+};
+
+EffectManager::EffectManager()
 {
     this->Reset();
 }
-
-BSS_SORT(D1) EffectManager g_EffectManager;
-BSS_SORT(D2) ChainElem g_EffectManagerCalcChain;
-BSS_SORT(D3) ChainElem g_EffectManagerDrawChain;
 
 void EffectManager::Reset()
 {
     memset(this, 0, sizeof(*this));
 }
 
-EffectCallbackResult Effect_RandomSplash(Effect *effect)
+i32 EffectManager::EffectCallbackRandomSplash(Effect *effect)
 {
     if (effect->timer == 0 && effect->timer.HasTicked())
     {
-        effect->unk_11c.x = (g_Rng.GetRandomF32InRange(256.0f) - 128.0f) / 12.0f;
-        effect->unk_11c.y = (g_Rng.GetRandomF32InRange(256.0f) - 128.0f) / 12.0f;
+        effect->unk_11c.x = (g_Rng.GetRandomF32ZeroToOne() * 256.0f - 128.0f) / 12.0f;
+        effect->unk_11c.y = (g_Rng.GetRandomF32ZeroToOne() * 256.0f - 128.0f) / 12.0f;
         effect->unk_11c.z = 0.0f;
 
         effect->unk_128 = -effect->unk_11c / 19.0f;
@@ -37,12 +65,12 @@ EffectCallbackResult Effect_RandomSplash(Effect *effect)
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-EffectCallbackResult Effect_RandomSplashBig(Effect *effect)
+i32 EffectManager::EffectCallbackRandomSplashBig(Effect *effect)
 {
     if (effect->timer == 0 && effect->timer.HasTicked())
     {
-        effect->unk_11c.x = (g_Rng.GetRandomF32InRange(256.0f) - 128.0f) * 4.0f / 33.0f;
-        effect->unk_11c.y = (g_Rng.GetRandomF32InRange(256.0f) - 128.0f) * 4.0f / 33.0f;
+        effect->unk_11c.x = (g_Rng.GetRandomF32ZeroToOne() * 256.0f - 128.0f) * 4.0f / 33.0f;
+        effect->unk_11c.y = (g_Rng.GetRandomF32ZeroToOne() * 256.0f - 128.0f) * 4.0f / 33.0f;
         effect->unk_11c.z = 0.0f;
 
         effect->unk_128 = -effect->unk_11c / 20.0f;
@@ -54,7 +82,7 @@ EffectCallbackResult Effect_RandomSplashBig(Effect *effect)
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-EffectCallbackResult Effect_Still(Effect *effect)
+i32 EffectManager::EffectCallbackStill(Effect *effect)
 {
     effect->pos1 += effect->unk_11c * g_Supervisor.effectiveFramerateMultiplier;
     effect->unk_11c += effect->unk_128 * g_Supervisor.effectiveFramerateMultiplier;
@@ -62,46 +90,54 @@ EffectCallbackResult Effect_Still(Effect *effect)
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-#pragma var_order(posOffset, verticalAngle, matrix, horizontalAngle, normalizedPos)
-EffectCallbackResult Effect_Callback4(Effect *effect)
+i32 EffectManager::EffectUpdateCallback4(Effect *effect)
 {
-    D3DXVECTOR3 posOffset;
+    f32 posMagnitude;
+    ZunVec3 posOffset;
     f32 verticalAngle;
-    D3DXMATRIX matrix;
+    ZunMatrix local_54;
     f32 horizontalAngle;
-    D3DXVECTOR3 normalizedPos;
+    ZunVec3 normalizedPos;
+    f32 alpha;
 
-    D3DXVec3Normalize(&normalizedPos, &effect->pos2);
+    effect->pos2.getNormalized(normalizedPos);
 
-    verticalAngle = sinf(effect->angleRelated);
-    horizontalAngle = cosf(effect->angleRelated);
+    verticalAngle = ZUN_SINF(effect->angleRelated);
+    horizontalAngle = ZUN_COSF(effect->angleRelated);
 
     effect->quaternion.x = normalizedPos.x * verticalAngle;
     effect->quaternion.y = normalizedPos.y * verticalAngle;
     effect->quaternion.z = normalizedPos.z * verticalAngle;
     effect->quaternion.w = horizontalAngle;
-    D3DXMatrixRotationQuaternion(&matrix, &effect->quaternion);
+
+    local_54.FromQuaternion(effect->quaternion);
+
+    //    D3DXMatrixRotationQuaternion(&local_54, &effect->quaternion);
 
     posOffset.x = normalizedPos.y * 1.0f - normalizedPos.z * 0.0f;
     posOffset.y = normalizedPos.z * 0.0f - normalizedPos.x * 1.0f;
     posOffset.z = normalizedPos.x * 0.0f - normalizedPos.y * 0.0f;
 
-    if (D3DXVec3LengthSq(&posOffset) < 0.00001f)
+    posMagnitude = posOffset.getMagnitude();
+
+    if (posMagnitude * posMagnitude < 0)
     {
-        normalizedPos = D3DXVECTOR3(1.0f, 0.0f, 0.0f);
+        normalizedPos = ZunVec3(1.0f, 0.0f, 0.0f);
     }
     else
     {
-        D3DXVec3Normalize(&posOffset, &posOffset);
+        posOffset.getNormalized(posOffset);
+        //        D3DXVec3Normalize(&posOffset, &posOffset);
     }
 
-    posOffset *= effect->distance;
-    D3DXVec3TransformCoord(&posOffset, &posOffset, &matrix);
+    posOffset *= effect->unk_15c;
+    //    D3DXVec3TransformCoord(&posOffset, &posOffset, &local_54);
+    posOffset = local_54 * posOffset;
     posOffset.z *= 6.0f;
 
     effect->pos1 = posOffset + effect->position;
 
-    if (effect->flag_17a)
+    if (effect->unk_17a)
     {
         effect->unk_17b++;
 
@@ -110,7 +146,7 @@ EffectCallbackResult Effect_Callback4(Effect *effect)
             return EFFECT_CALLBACK_RESULT_STOP;
         }
 
-        float alpha = 1.0f - effect->unk_17b / 16.0f;
+        alpha = 1.0f - effect->unk_17b / 16.0f;
         effect->vm.color = COLOR_SET_ALPHA3(effect->vm.color, (i32)(alpha * 255.0f));
 
         effect->vm.scaleY = 2.0f - alpha;
@@ -120,7 +156,7 @@ EffectCallbackResult Effect_Callback4(Effect *effect)
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-EffectCallbackResult Effect_Attract(Effect *effect)
+i32 EffectManager::EffectCallbackAttract(Effect *effect)
 {
     f32 angle;
 
@@ -128,20 +164,20 @@ EffectCallbackResult Effect_Attract(Effect *effect)
     {
         effect->position = effect->pos1;
 
-        angle = g_Rng.GetRandomF32InRange(ZUN_2PI) - ZUN_PI;
-        effect->pos2.x = cosf(angle);
-        effect->pos2.y = sinf(angle);
+        angle = g_Rng.GetRandomF32ZeroToOne() * ZUN_2PI - ZUN_PI;
+        effect->pos2.x = ZUN_COSF(angle);
+        effect->pos2.y = ZUN_SINF(angle);
         effect->pos2.z = 0.0;
     }
 
-    angle = 256.0f - (f32)effect->timer * 256.0f / 60.0f;
+    angle = 256.0f - effect->timer.AsFramesFloat() * 256.0f / 60.0f;
 
-    effect->pos1 = angle * effect->pos2 + effect->position;
+    effect->pos1 = effect->pos2 * angle + effect->position;
 
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-EffectCallbackResult Effect_AttractSlow(Effect *effect)
+i32 EffectManager::EffectCallbackAttractSlow(Effect *effect)
 {
     f32 angle;
 
@@ -149,49 +185,29 @@ EffectCallbackResult Effect_AttractSlow(Effect *effect)
     {
         effect->position = effect->pos1;
 
-        angle = g_Rng.GetRandomF32InRange(ZUN_2PI) - ZUN_PI;
-        effect->pos2.x = cosf(angle);
-        effect->pos2.y = sinf(angle);
+        angle = g_Rng.GetRandomF32ZeroToOne() * ZUN_2PI - ZUN_PI;
+        effect->pos2.x = ZUN_COSF(angle);
+        effect->pos2.y = ZUN_SINF(angle);
         effect->pos2.z = 0.0;
     }
 
-    angle = 256.0f - (f32)effect->timer * 256.0f / 240.0f;
+    angle = 256.0f - effect->timer.AsFramesFloat() * 256.0f / 240.0f;
 
-    effect->pos1 = angle * effect->pos2 + effect->position;
+    effect->pos1 = effect->pos2 * angle + effect->position;
 
     return EFFECT_CALLBACK_RESULT_DONE;
 }
 
-EffectInfo g_Effects[] = {
-    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_SMALL, NULL},
-    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_SPIRAL, NULL},
-    {ANM_SCRIPT_BULLET4_SPAWN_BUBBLE_EXPLOSION_NORMAL, NULL},
-    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_1, Effect_RandomSplashBig},
-    {ANM_SCRIPT_BULLET4_SPAWN_WHITE_PARTICLE, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_RED_PARTICLE, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_GREEN_PARTICLE, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_BLUE_PARTICLE, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_WHITE_PARTICLE_SMALL, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_RED_PARTICLE_SMALL, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_GREEN_PARTICLE_SMALL, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SPAWN_BLUE_PARTICLE_SMALL, Effect_RandomSplash},
-    {ANM_SCRIPT_BULLET4_SCRIPT_17, NULL},
-    {ANM_SCRIPT_BULLET4_SCRIPT_18, Effect_Callback4},
-    {ANM_SCRIPT_BULLET4_SCRIPT_18, Effect_Callback4},
-    {ANM_SCRIPT_BULLET4_SCRIPT_18, Effect_Callback4},
-    {ANM_SCRIPT_EFFECTS_SPELLCARD_BACKGROUND, NULL},
-    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_2, Effect_Attract},
-    {ANM_SCRIPT_BULLET4_SPAWN_GLOW_3, Effect_AttractSlow},
-    {ANM_SCRIPT_BULLET4_SCRIPT_19, Effect_Still},
-};
-
-Effect *EffectManager::SpawnParticles(i32 effectIdx, D3DXVECTOR3 *pos, i32 count, ZunColor color)
+Effect *EffectManager::SpawnParticles(i32 effectIdx, const ZunVec3 *pos, i32 count, ZunColor color)
 {
-    Effect *effect = &this->effects[this->nextIndex];
-    for (i32 i = 0; i < MAX_EFFECT_COUNT; i++)
+    i32 idx;
+    Effect *effect;
+
+    effect = &this->effects[this->nextIndex];
+    for (idx = 0; idx < ARRAY_SIZE_SIGNED(this->effects) - 1; idx++)
     {
         this->nextIndex++;
-        if (this->nextIndex >= MAX_EFFECT_COUNT)
+        if (this->nextIndex >= ARRAY_SIZE_SIGNED(this->effects) - 1)
         {
             this->nextIndex = 0;
         }
@@ -208,7 +224,7 @@ Effect *EffectManager::SpawnParticles(i32 effectIdx, D3DXVECTOR3 *pos, i32 count
             continue;
         }
 
-        effect->inUseFlag = true;
+        effect->inUseFlag = 1;
         effect->effectId = effectIdx;
         effect->pos1 = *pos;
 
@@ -216,8 +232,8 @@ Effect *EffectManager::SpawnParticles(i32 effectIdx, D3DXVECTOR3 *pos, i32 count
 
         effect->vm.color = color;
         effect->updateCallback = g_Effects[effectIdx].updateCallback;
-        effect->timer = 0;
-        effect->flag_17a = false;
+        effect->timer.InitializeForPopup();
+        effect->unk_17a = 0;
         effect->unk_17b = 0;
         count--;
 
@@ -234,43 +250,49 @@ Effect *EffectManager::SpawnParticles(i32 effectIdx, D3DXVECTOR3 *pos, i32 count
         }
     }
 
-    return i >= MAX_EFFECT_COUNT ? &this->effects[MAX_EFFECT_COUNT] : effect;
+    return idx >= ARRAY_SIZE_SIGNED(this->effects) - 1 ? &this->effects[512] : effect;
 }
 
-ChainCallbackResult EffectManager_OnUpdate(EffectManager *mgr)
+ChainCallbackResult EffectManager::OnUpdate(EffectManager *mgr)
 {
-    Effect *effect = &mgr->effects[0];
+    i32 effectIdx;
+    Effect *effect;
+
+    effect = &mgr->effects[0];
     mgr->activeEffects = 0;
-    for (i32 i = 0; i < MAX_EFFECT_COUNT; i++, effect++)
+    for (effectIdx = 0; effectIdx < ARRAY_SIZE_SIGNED(mgr->effects) - 1; effectIdx++, effect++)
     {
-        if (!effect->inUseFlag)
+        if (effect->inUseFlag == 0)
         {
             continue;
         }
 
         mgr->activeEffects++;
-        if (effect->updateCallback != NULL && effect->updateCallback(effect) != EFFECT_CALLBACK_RESULT_DONE)
+        if (effect->updateCallback != NULL && (effect->updateCallback)(effect) != EFFECT_CALLBACK_RESULT_DONE)
         {
-            effect->inUseFlag = false;
+            effect->inUseFlag = 0;
         }
 
         if (g_AnmManager->ExecuteScript(&effect->vm) != 0)
         {
-            effect->inUseFlag = false;
+            effect->inUseFlag = 0;
         }
 
-        effect->timer++;
+        effect->timer.Tick();
     }
 
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-ChainCallbackResult EffectManager_OnDraw(EffectManager *mgr)
+ChainCallbackResult EffectManager::OnDraw(EffectManager *mgr)
 {
-    Effect *effect = &mgr->effects[0];
-    for (i32 i = 0; i < MAX_EFFECT_COUNT; i++, effect++)
+    int effectIdx;
+    Effect *effect;
+
+    effect = &mgr->effects[0];
+    for (effectIdx = 0; effectIdx < ARRAY_SIZE_SIGNED(mgr->effects) - 1; effectIdx++, effect++)
     {
-        if (!effect->inUseFlag)
+        if (effect->inUseFlag == 0)
         {
             continue;
         }
@@ -282,49 +304,49 @@ ChainCallbackResult EffectManager_OnDraw(EffectManager *mgr)
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-ZunResult EffectManager_AddedCallback(EffectManager *mgr)
+ZunResult EffectManager::AddedCallback(EffectManager *mgr)
 {
     mgr->Reset();
     switch (g_GameManager.currentStage)
     {
-    case DummyStage:
-    case Stage1:
+    case 0:
+    case 1:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff01.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case Stage2:
+    case 2:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff02.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case Stage3:
+    case 3:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff03.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case Stage4:
+    case 4:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff04.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case Stage5:
+    case 5:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff05.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case Stage6:
+    case 6:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff05.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
         break;
-    case ExtraStage:
+    case 7:
         if (g_AnmManager->LoadAnm(ANM_FILE_EFFECTS, "data/eff04.anm", ANM_OFFSET_EFFECTS) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
@@ -334,31 +356,31 @@ ZunResult EffectManager_AddedCallback(EffectManager *mgr)
     return ZUN_SUCCESS;
 }
 
-ZunResult EffectManager_DeletedCallback(EffectManager *p)
+ZunResult EffectManager::DeletedCallback(EffectManager *p)
 {
     g_AnmManager->ReleaseAnm(ANM_FILE_EFFECTS);
 
     return ZUN_SUCCESS;
 }
 
-ZunResult EffectManager_RegisterChain()
+ZunResult EffectManager::RegisterChain()
 {
     EffectManager *mgr = &g_EffectManager;
     mgr->Reset();
 
-    g_EffectManagerCalcChain.callback = (ChainCallback)EffectManager_OnUpdate;
+    g_EffectManagerCalcChain.callback = (ChainCallback)mgr->OnUpdate;
     g_EffectManagerCalcChain.addedCallback = NULL;
     g_EffectManagerCalcChain.deletedCallback = NULL;
-    g_EffectManagerCalcChain.addedCallback = (ChainAddedCallback)EffectManager_AddedCallback;
-    g_EffectManagerCalcChain.deletedCallback = (ChainAddedCallback)EffectManager_DeletedCallback;
+    g_EffectManagerCalcChain.addedCallback = (ChainAddedCallback)mgr->AddedCallback;
+    g_EffectManagerCalcChain.deletedCallback = (ChainAddedCallback)mgr->DeletedCallback;
     g_EffectManagerCalcChain.arg = mgr;
 
-    if (g_Chain.AddToCalcChain(&g_EffectManagerCalcChain, TH_CHAIN_PRIO_CALC_EFFECTMANAGER) != ZUN_SUCCESS)
+    if (g_Chain.AddToCalcChain(&g_EffectManagerCalcChain, TH_CHAIN_PRIO_CALC_EFFECTMANAGER))
     {
         return ZUN_ERROR;
     }
 
-    g_EffectManagerDrawChain.callback = (ChainCallback)EffectManager_OnDraw;
+    g_EffectManagerDrawChain.callback = (ChainCallback)mgr->OnDraw;
     g_EffectManagerDrawChain.addedCallback = NULL;
     g_EffectManagerDrawChain.deletedCallback = NULL;
     g_EffectManagerDrawChain.arg = mgr;
@@ -367,9 +389,8 @@ ZunResult EffectManager_RegisterChain()
     return ZUN_SUCCESS;
 }
 
-void EffectManager_CutChain()
+void EffectManager::CutChain()
 {
     g_Chain.Cut(&g_EffectManagerCalcChain);
     g_Chain.Cut(&g_EffectManagerDrawChain);
 }
-} // namespace th06

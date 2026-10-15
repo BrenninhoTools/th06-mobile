@@ -1,37 +1,55 @@
 #pragma once
-#include "decomp.hpp"
-#include <Windows.h>
 
-namespace th06
+#include "inttypes.hpp"
+#include <cstdio>
+
+enum AccessMode
 {
+    ACCESS_READ,
+    ACCESS_WRITE,
+    ACCESS_INVALID
+};
 
-#define PBG_EOF (-1)
-
-class FileAbstraction
+class IFileAbstraction
 {
   public:
-    virtual BOOL Open(const char *filename, char *mode);
-    virtual void Close(void);
-    virtual BOOL Read(void *data, DWORD dataLen, DWORD *numBytesRead);
-    virtual BOOL Write(void *data, DWORD dataLen, DWORD *outWritten);
-    virtual int ReadByte(void);
-    virtual int WriteByte(int b);
-    virtual BOOL Seek(DWORD amount, DWORD seekFrom);
-    virtual DWORD Tell(void);
-    virtual DWORD GetSize(void);
+    virtual i32 Open(const char *filename, const char *mode) = 0;
+    virtual void Close() = 0;
+    virtual i32 Read(u8 *data, u32 dataLen, u32 *numBytesRead) = 0;
+    virtual i32 Write(const u8 *data, u32 dataLen, u32 *outWritten) = 0;
+    virtual i32 ReadByte() = 0;
+    virtual i32 WriteByte(u32 b) = 0;
+    virtual i32 Seek(u32 amount, u32 seekFrom) = 0;
+    virtual u32 Tell() = 0;
+    virtual u32 GetSize() = 0;
+    virtual u8 *ReadWholeFile(u32 maxSize) = 0;
+};
 
-    BOOL WriteString(void *buffer);
-
-    virtual LPVOID ReadWholeFile(DWORD maxSize);
-
+class FileAbstraction : public IFileAbstraction
+{
+  public:
     FileAbstraction();
     ~FileAbstraction();
 
+    virtual i32 Open(const char *filename, const char *mode);
+    virtual void Close();
+    virtual i32 Read(u8 *data, u32 dataLen, u32 *numBytesRead);
+    virtual i32 Write(const u8 *data, u32 dataLen, u32 *outWritten);
+    virtual i32 ReadByte();
+    virtual i32 WriteByte(u32 b);
+    virtual i32 Seek(u32 amount, u32 seekFrom);
+    virtual u32 Tell();
+    virtual u32 GetSize();
+    virtual u8 *ReadWholeFile(u32 maxSize);
+
+    bool HasNonNullHandle()
+    {
+        return this->handle != NULL;
+    }
+
   protected:
-    HANDLE handle;
+    std::FILE *handle;
 
   private:
-    DWORD access;
+    AccessMode access;
 };
-ZUN_ASSERT_SIZE(FileAbstraction, 0xc);
-} // namespace th06

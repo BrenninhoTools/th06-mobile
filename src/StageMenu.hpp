@@ -1,19 +1,18 @@
 #pragma once
-#include "AnmVm.hpp"
-#include "decomp.hpp"
 
-namespace th06
+#include "AnmVm.hpp"
+#include "inttypes.hpp"
+
+struct StageMenu
 {
-class StageMenu
-{
-  public:
+    StageMenu();
+
     i32 OnUpdateGameMenu();
     i32 OnUpdateRetryMenu();
 
     void OnDrawGameMenu();
     void OnDrawRetryMenu();
 
-  private:
     // Current state of this menu.
     u32 curState;
     // Number of frames since last state change. Used to delay certain actions
@@ -22,5 +21,3 @@ class StageMenu
     AnmVm menuSprites[6];
     AnmVm menuBackground;
 };
-ZUN_ASSERT_TYPE(StageMenu, 0x778, 4);
-} // namespace th06

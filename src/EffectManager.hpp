@@ -1,12 +1,11 @@
 #pragma once
+
 #include "Chain.hpp"
 #include "Effect.hpp"
 #include "ZunColor.hpp"
+#include "ZunMath.hpp"
 #include "ZunResult.hpp"
-#include "decomp.hpp"
-
-namespace th06
-{
+#include "inttypes.hpp"
 
 enum ParticleEffects
 {
@@ -31,24 +30,30 @@ enum ParticleEffects
     PARTICLE_EFFECT_UNK_18,
     PARTICLE_EFFECT_UNK_19,
 };
-
-#define MAX_EFFECT_COUNT 512
-
 struct EffectManager
 {
-    EffectManager();
-
-    void Reset();
-    Effect *SpawnParticles(i32 effectIdx, D3DXVECTOR3 *pos, i32 count, ZunColor color);
-
     i32 nextIndex;
     i32 activeEffects;
-    Effect effects[MAX_EFFECT_COUNT + 1]; // +1 dummy slot to avoid null checks for failed spawns
-};
-ZUN_ASSERT_TYPE(EffectManager, 0x2f984, 4);
+    Effect effects[513];
 
-ZunResult EffectManager_RegisterChain();
-void EffectManager_CutChain();
+    EffectManager();
+
+    static ZunResult RegisterChain();
+    static void CutChain();
+    static ChainCallbackResult OnUpdate(EffectManager *mgr);
+    static ZunResult AddedCallback(EffectManager *mgr);
+    static ZunResult DeletedCallback(EffectManager *mgr);
+
+    static i32 EffectCallbackRandomSplash(Effect *);
+    static i32 EffectCallbackRandomSplashBig(Effect *);
+    static i32 EffectCallbackStill(Effect *);
+    static i32 EffectUpdateCallback4(Effect *);
+    static i32 EffectCallbackAttract(Effect *);
+    static i32 EffectCallbackAttractSlow(Effect *);
+
+    static ChainCallbackResult OnDraw(EffectManager *mgr);
+    void Reset();
+    Effect *SpawnParticles(i32 effectIdx, const ZunVec3 *pos, i32 count, ZunColor color);
+};
 
 extern EffectManager g_EffectManager;
-} // namespace th06

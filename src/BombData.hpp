@@ -1,21 +1,20 @@
 #pragma once
+
 #include "Player.hpp"
 
-namespace th06
-{
 struct BombData
 {
     void (*calc)(Player *p);
     void (*draw)(Player *p);
+
+    static void BombReimuACalc(Player *);
+    static void BombReimuBCalc(Player *);
+    static void BombMarisaACalc(Player *);
+    static void BombMarisaBCalc(Player *);
+    static void BombReimuADraw(Player *);
+    static void BombReimuBDraw(Player *);
+    static void BombMarisaADraw(Player *);
+    static void BombMarisaBDraw(Player *);
+    static void DarkenViewport(Player *player);
 };
-
-void BombReimuACalc(Player *);
-void BombReimuBCalc(Player *);
-void BombMarisaACalc(Player *);
-void BombMarisaBCalc(Player *);
-void BombReimuADraw(Player *);
-void BombReimuBDraw(Player *);
-void BombMarisaADraw(Player *);
-void BombMarisaBDraw(Player *);
-
-} // namespace th06
+extern const BombData g_BombData[4];

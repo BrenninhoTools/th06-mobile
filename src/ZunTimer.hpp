@@ -1,11 +1,8 @@
 #pragma once
-#include "Supervisor.hpp"
-#include "ZunBool.hpp"
-#include "ZunResult.hpp"
-#include "decomp.hpp"
 
-namespace th06
-{
+#include "Supervisor.hpp"
+#include "inttypes.hpp"
+
 struct ZunTimer
 {
     i32 previous;
@@ -17,89 +14,73 @@ struct ZunTimer
         this->Initialize();
     }
 
-    ZunBool operator==(i32 time)
+    bool operator==(i32 time) const
     {
         return this->current == time;
     }
 
-    ZunBool operator>=(i32 time)
+    bool operator>=(i32 time) const
     {
         return this->current >= time;
     }
 
-    ZunBool operator>(i32 time)
+    bool operator>(i32 time) const
     {
         return this->current > time;
     }
 
-    ZunBool operator<(i32 time)
+    bool operator<(i32 time) const
     {
         return this->current < time;
     }
 
-    ZunBool operator<=(i32 time)
+    bool operator<=(i32 time) const
     {
         return this->current <= time;
-    }
-
-    i32 operator%(i32 divisor)
-    {
-        return this->current % divisor;
     }
 
     void Initialize();
     void Increment(i32 value);
     void Decrement(i32 value);
+    i32 NextTick();
 
-    i32 Tick()
-    {
-        this->previous = this->current;
-        g_Supervisor.TickTimer(&this->current, &this->subFrame);
-        return this->current;
-    }
-
-    void operator+=(i32 value)
+    void IncrementInline(i32 value)
     {
         this->Increment(value);
     }
-    void operator-=(i32 value)
+
+    void InitializeForPopup()
     {
-        this->Decrement(value);
-    }
-    void operator++(int)
-    {
-        this->Tick();
-    }
-    void operator--(int)
-    {
-        this->Decrement(1);
+        this->current = 0;
+        this->subFrame = 0;
+        this->previous = -999;
     }
 
     void SetCurrent(i32 value)
     {
         this->current = value;
-        this->subFrame = 0.0f;
+        this->subFrame = 0;
         this->previous = -999;
     }
-    void operator=(i32 value)
+
+    void Tick()
     {
-        SetCurrent(value);
+        this->previous = this->current;
+        g_Supervisor.TickTimer(&this->current, &this->subFrame);
     }
 
-    operator f32()
+    f32 AsFramesFloat() const
     {
         return this->current + this->subFrame;
     }
 
-    operator i32()
+    i32 AsFrames() const
     {
         return this->current;
     }
 
-    ZunBool HasTicked()
+    bool HasTicked() const
     {
         return this->current != this->previous;
     }
 };
-ZUN_ASSERT_TYPE(ZunTimer, 0xc, 4);
-} // namespace th06

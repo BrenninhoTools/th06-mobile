@@ -1,220 +1,197 @@
 #include "pbg3/FileAbstraction.hpp"
+#include "FileSystem.hpp"
 
-namespace th06
-{
 FileAbstraction::FileAbstraction()
 {
-    this->handle = INVALID_HANDLE_VALUE;
-    this->access = 0;
+    handle = NULL;
+    access = ACCESS_INVALID;
 }
 
-// DUMMY FUNCTIONS FOR IAT
-struct MappedFileView
+i32 FileAbstraction::Open(const char *filename, const char *mode)
 {
-    HANDLE file;
-    HANDLE mapping;
-    void *data;
-    DWORD size;
-    BOOL writable;
-};
-BOOL CloseMappedFileView(MappedFileView *view)
-{
-    FlushViewOfFile(view->data, 0);
-    UnmapViewOfFile(view->data);
-    CloseHandle(view->mapping);
-    CloseHandle(view->file);
-    return TRUE;
-}
-BOOL OpenMappedFileView(const WCHAR *filename, BOOL writable, MappedFileView *view)
-{
-    GetFileAttributesW(filename);
-    CreateFileW(filename, 0, 0, NULL, 0, 0, NULL);
-    GetFileSize(view->file, NULL);
-    CreateFileMappingA(view->file, NULL, 0, 0, 0, NULL);
-    MapViewOfFile(view->mapping, 0, 0, 0, 0);
-    return TRUE;
-}
-BOOL Exists_Dummy(const char *filename)
-{
-    GetFileAttributesA(filename);
-    return TRUE;
-}
-// END DUMMY FUNCTIONS
+    char openMode[] = "*b";
 
-FileAbstraction::~FileAbstraction()
-{
-    Close();
-}
+    this->Close();
 
-BOOL FileAbstraction::Open(const char *filename, char *mode)
-{
-    char *curMode;
-    BOOL isAppendMode = FALSE;
-    DWORD creationDisposition;
-
-    Close();
-
-    for (curMode = mode; *curMode != '\0'; curMode++)
+    const char *curMode;
+    for (curMode = mode; *curMode != '\0'; curMode += 1)
     {
         if (*curMode == 'r')
         {
-            access = GENERIC_READ;
-            creationDisposition = OPEN_EXISTING;
+            this->access = ACCESS_READ;
+            openMode[0] = 'r';
             break;
         }
-        if (*curMode == 'w')
+        else if (*curMode == 'w')
         {
-            DeleteFile(filename);
-            access = GENERIC_WRITE;
-            creationDisposition = OPEN_ALWAYS;
+            this->access = ACCESS_WRITE;
+            openMode[0] = 'w';
             break;
         }
-        if (*curMode == 'a')
+        else if (*curMode == 'a')
         {
-            isAppendMode = TRUE;
-            access = GENERIC_WRITE;
-            creationDisposition = OPEN_ALWAYS;
+            this->access = ACCESS_WRITE;
+            openMode[0] = 'a';
             break;
         }
     }
 
     if (*curMode == '\0')
-        return FALSE;
+    {
+        return 0;
+    }
 
-    handle = CreateFile(filename, this->access, FILE_SHARE_READ, NULL, creationDisposition,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    this->handle = FileSystem::FopenUTF8(filename, openMode);
 
-    if (INVALID_HANDLE_VALUE == this->handle)
-        return FALSE;
+    if (this->handle == NULL)
+        return 0;
 
-    if (isAppendMode)
-        SetFilePointer(this->handle, 0, NULL, FILE_END);
-
-    return TRUE;
+    return 1;
 }
 
-void FileAbstraction::Close(void)
+void FileAbstraction::Close()
 {
-    if (INVALID_HANDLE_VALUE != handle)
+    if (this->handle != NULL)
     {
-        CloseHandle(handle);
-        handle = INVALID_HANDLE_VALUE;
-        access = 0;
+        std::fclose(this->handle);
+        this->handle = NULL;
+        this->access = ACCESS_INVALID;
     }
 }
 
-BOOL FileAbstraction::Read(void *data, DWORD dataLen, DWORD *numBytesRead)
+i32 FileAbstraction::Read(u8 *data, u32 dataLen, u32 *numBytesRead)
 {
-    if (GENERIC_READ != access)
-        return FALSE;
+    if (this->access != ACCESS_READ)
+    {
+        return false;
+    }
 
-    return ReadFile(handle, data, dataLen, numBytesRead, NULL);
+    *numBytesRead = std::fread(data, 1, dataLen, this->handle);
+
+    return !(dataLen != 0 && *numBytesRead < dataLen);
 }
 
-BOOL FileAbstraction::Write(void *data, DWORD dataLen, DWORD *outWritten)
+i32 FileAbstraction::Write(const u8 *data, u32 dataLen, u32 *outWritten)
 {
-    if (GENERIC_WRITE != access)
-        return FALSE;
+    if (this->access != ACCESS_WRITE)
+    {
+        return false;
+    }
 
-    return WriteFile(handle, data, dataLen, outWritten, NULL);
+    *outWritten = std::fwrite(data, 1, dataLen, this->handle);
+
+    return !(dataLen != 0 && *outWritten < dataLen);
 }
 
-int FileAbstraction::ReadByte()
+i32 FileAbstraction::ReadByte()
 {
-    BYTE data;
-    DWORD outBytesRead;
+    u8 data;
+    u32 outBytesRead;
 
-    if (FALSE == this->Read(&data, 1, &outBytesRead))
-        return PBG_EOF;
-    if (outBytesRead == 0)
-        return PBG_EOF;
+    if (!this->Read(&data, 1, &outBytesRead))
+    {
+        return -1;
+    }
     else
+    {
+        if (outBytesRead == 0)
+        {
+            return -1;
+        }
         return data;
+    }
 }
 
-int FileAbstraction::WriteByte(int b)
+i32 FileAbstraction::WriteByte(u32 b)
 {
-    BYTE outByte;
-    DWORD outBytesWritten;
+    u8 outByte;
+    u32 outBytesWritten;
 
     outByte = b;
-    if (FALSE == this->Write(&outByte, 1, &outBytesWritten))
-        return PBG_EOF;
-    if (outBytesWritten == 0)
-        return PBG_EOF;
-    else
-        return b;
-}
-
-BOOL FileAbstraction::Seek(DWORD amount, DWORD seekFrom)
-{
-    if (INVALID_HANDLE_VALUE == this->handle)
-        return FALSE;
-
-    SetFilePointer(this->handle, amount, NULL, seekFrom);
-    return TRUE;
-}
-
-DWORD FileAbstraction::Tell(void)
-{
-    if (INVALID_HANDLE_VALUE == handle)
-        return 0;
-
-    return SetFilePointer(handle, 0, NULL, FILE_CURRENT);
-}
-
-DWORD FileAbstraction::GetSize(void)
-{
-    if (INVALID_HANDLE_VALUE == handle)
-        return 0;
-
-    return GetFileSize(handle, NULL);
-}
-
-BOOL FileAbstraction::WriteString(void *buffer)
-{
-    DWORD Length;
-    DWORD temp;
-
-    if (GENERIC_WRITE != access)
-        return FALSE;
-
-    Length = strlen((char *)buffer);
-    return Write(buffer, Length, &temp);
-}
-
-LPVOID FileAbstraction::ReadWholeFile(DWORD maxSize)
-{
-    DWORD oldLocation, dataLen, outDataLen;
-    LPVOID data;
-
-    if (GENERIC_READ != this->access)
-        return NULL;
-
-    dataLen = this->GetSize();
-    if (dataLen > maxSize)
-        return NULL;
-
-    data = LocalAlloc(LPTR, dataLen);
-    if (NULL == data)
-        return NULL;
-
-    oldLocation = Tell();
-
-    // Pretty sure the plan here was to seek to 0, but woops the code
-    // is buggy. And yes, this case leaks the data. Amazing, I know.
-    if (FALSE == Seek(oldLocation, FILE_BEGIN))
-        return NULL;
-
-    if (FALSE == Read(data, dataLen, &outDataLen))
+    if (!this->Write(&outByte, 1, &outBytesWritten))
     {
-        LocalFree(data);
+        return -1;
+    }
+    else
+    {
+        if (outBytesWritten == 0)
+        {
+            return -1;
+        }
+        return b;
+    }
+}
+
+i32 FileAbstraction::Seek(u32 amount, u32 seekFrom)
+{
+    if (this->handle == NULL)
+    {
+        return 0;
+    }
+
+    std::fseek(this->handle, amount, seekFrom);
+    return 1;
+}
+
+u32 FileAbstraction::Tell()
+{
+    if (this->handle == NULL)
+    {
+        return 0;
+    }
+
+    return std::ftell(this->handle);
+}
+
+u32 FileAbstraction::GetSize()
+{
+    if (this->handle == NULL)
+    {
+        return 0;
+    }
+
+    long curPos = std::ftell(this->handle);
+    std::fseek(this->handle, 0, SEEK_END);
+    u32 fileLen = (u32)std::ftell(this->handle);
+    std::fseek(this->handle, curPos, SEEK_SET);
+
+    return fileLen;
+}
+
+u8 *FileAbstraction::ReadWholeFile(u32 maxSize)
+{
+    if (this->access != ACCESS_READ)
+    {
         return NULL;
     }
 
-    Seek(oldLocation, FILE_BEGIN);
-
-    return data;
+    u32 dataLen = this->GetSize();
+    u32 outDataLen;
+    if (dataLen <= maxSize)
+    {
+        u8 *data = new u8[dataLen];
+        if (data != NULL)
+        {
+            u32 oldLocation = this->Tell();
+            // Pretty sure the plan here was to seek to 0, but woops the code
+            // is buggy.
+            if (this->Seek(oldLocation, SEEK_SET) != 0)
+            {
+                if (this->Read(data, dataLen, &outDataLen) == 0)
+                {
+                    delete[] data;
+                    return NULL;
+                }
+                this->Seek(oldLocation, SEEK_SET);
+                return data;
+            }
+            // Yes, this case leaks the data. Amazing, I know.
+        }
+    }
+    return NULL;
 }
 
-} // namespace th06
+FileAbstraction::~FileAbstraction()
+{
+    this->Close();
+}

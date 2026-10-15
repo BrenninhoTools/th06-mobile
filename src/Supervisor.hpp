@@ -1,83 +1,46 @@
 #pragma once
-#include <d3d8.h>
-#include <d3dx8math.h>
-#include <dinput.h>
+
+#include <SDL2/SDL_gamecontroller.h>
+#include <SDL2/SDL_video.h>
 
 #include "Chain.hpp"
-#include "Global.hpp"
-#include "ZunBool.hpp"
+#include "Controller.hpp"
+#include "MidiOutput.hpp"
+#include "ZunMath.hpp"
 #include "ZunResult.hpp"
-#include "decomp.hpp"
+#include "inttypes.hpp"
 #include "pbg3/Pbg3Archive.hpp"
 
-namespace th06
+#define GAME_VERSION 0x102
+
+enum GameConfigOptsShifts
 {
-struct MidiOutput;
-#define BUILD_VERSION_008p 0x00081
-#define BUILD_VERSION_013 0x00130
-#define BUILD_VERSION_013a 0x00131
-#define BUILD_VERSION_100 0x01000
-#define BUILD_VERSION_101 0x01010
-#define BUILD_VERSION_102 0x01020
-#define BUILD_VERSION_102b 0x01022
-#define BUILD_VERSION_102c 0x01023
-#define BUILD_VERSION_102d 0x01024
-#define BUILD_VERSION_102f 0x01026
-#define BUILD_VERSION_102g 0x01027
-#define BUILD_VERSION_102h 0x01028
-
-#ifndef BUILD_VERSION
-#define BUILD_VERSION BUILD_VERSION_102h
-#endif
-#ifndef GAME_VERSION
-#define GAME_VERSION 0x0102
-#endif
-
-// The 0.13a trial's archive marker differs from its config and replay format version.
-// TODO: Check 0.08p and 0.13
-#if BUILD_VERSION == BUILD_VERSION_013a
-#define CONFIG_VERSION 0x0102
-#define REPLAY_VERSION 0x0102
-#else
-#define CONFIG_VERSION GAME_VERSION
-#define REPLAY_VERSION GAME_VERSION
-#endif
-
-struct GameConfigOpts
-{
-    u32 useSwTextureBlending : 1;
-    u32 dontUseVertexBuf : 1;
-    u32 force16bitColorMode : 1;
-    u32 clearBackBufferOnRefresh : 1;
-    u32 displayMinimumGraphics : 1;
-    u32 suppressUseOfGoroudShading : 1;
-    u32 disableDepthTest : 1;
-    u32 force60Fps : 1;
-    u32 disableColorCompositing : 1;
-    u32 referenceRasterizerMode : 1;
-    u32 disableFog : 1;
-    u32 dontUseDirectInput : 1;
-    alignment_bitfields(u32, 20);
+    GCOS_USE_D3D_HW_TEXTURE_BLENDING = 0x0,
+    GCOS_DONT_USE_VERTEX_BUF = 0x1,
+    GCOS_FORCE_16BIT_COLOR_MODE = 0x2,
+    GCOS_CLEAR_BACKBUFFER_ON_REFRESH = 0x3,
+    GCOS_DISPLAY_MINIMUM_GRAPHICS = 0x4,
+    GCOS_SUPPRESS_USE_OF_GOROUD_SHADING = 0x5,
+    GCOS_TURN_OFF_DEPTH_TEST = 0x6,
+    GCOS_FORCE_60FPS = 0x7,
+    GCOS_NO_COLOR_COMP = 0x8,
+    GCOS_REFERENCE_RASTERIZER_MODE = 0x9,
+    GCOS_DONT_USE_FOG = 0xa,
+    GCOS_NO_DIRECTINPUT_PAD = 0xb,
 };
-ZUN_ASSERT_TYPE(GameConfigOpts, 0x4, 4);
 
-#define GAME_WINDOW_WIDTH 640
-#define GAME_WINDOW_HEIGHT 480
-
-#define GAME_REGION_POS_X 32.0f
-#define GAME_REGION_POS_Y 16.0f
-
-#define GAME_REGION_WIDTH 384.0f
-#define GAME_REGION_HEIGHT 448.0f
-
-#define GAME_REGION_POS_RIGHT (GAME_REGION_POS_X + GAME_REGION_WIDTH)
-#define GAME_REGION_POS_BOTTOM (GAME_REGION_POS_Y + GAME_REGION_HEIGHT)
-
-#define GAME_REGION_LEFT 0.0f
-#define GAME_REGION_TOP 0.0f
-
-#define GAME_REGION_RIGHT (GAME_REGION_LEFT + GAME_REGION_WIDTH)
-#define GAME_REGION_BOTTOM (GAME_REGION_TOP + GAME_REGION_HEIGHT)
+struct ControllerMapping
+{
+    i16 shootButton;
+    i16 bombButton;
+    i16 focusButton;
+    i16 menuButton;
+    i16 upButton;
+    i16 downButton;
+    i16 leftButton;
+    i16 rightButton;
+    i16 skipButton;
+};
 
 enum MusicMode
 {
@@ -102,16 +65,19 @@ struct GameConfiguration
     u8 frameskipConfig;
     i16 padXAxis;
     i16 padYAxis;
-    unreferenced_fields(0x10);
+    i8 unk[16];
     // GameConfigOpts bitfield.
-    GameConfigOpts opts;
+    u32 opts;
+
+    u32 IsSoftwareTexturing()
+    {
+        return (this->opts >> GCOS_NO_COLOR_COMP & 1) | (this->opts >> GCOS_USE_D3D_HW_TEXTURE_BLENDING & 1);
+    }
 };
-ZUN_ASSERT_TYPE(GameConfiguration, 0x38, 4);
 
 #define IN_PBG3_INDEX 0
 #define MD_PBG3_INDEX 1
 #define ST_PBG3_INDEX 2
-#define TL_PBG3_INDEX 3
 #define CM_PBG3_INDEX 4
 #define ED_PBG3_INDEX 5
 
@@ -122,7 +88,7 @@ enum SupervisorState
     SUPERVISOR_STATE_INIT,
     SUPERVISOR_STATE_MAINMENU,
     SUPERVISOR_STATE_GAMEMANAGER,
-    SUPERVISOR_STATE_NEXT_STAGE,
+    SUPERVISOR_STATE_GAMEMANAGER_REINIT,
     SUPERVISOR_STATE_EXITSUCCESS,
     SUPERVISOR_STATE_EXITERROR,
     SUPERVISOR_STATE_RESULTSCREEN,
@@ -134,143 +100,85 @@ enum SupervisorState
 
 struct Supervisor
 {
-    Supervisor()
-    {
-        BSS_ZERO_INIT(memset(this, 0, sizeof(Supervisor)));
-    }
+    static ZunResult RegisterChain();
+    static ChainCallbackResult OnUpdate(Supervisor *s);
+    static ChainCallbackResult OnDraw(Supervisor *s);
+    static ZunResult AddedCallback(Supervisor *s);
+    static ZunResult DeletedCallback(Supervisor *s);
+    static void DrawFpsCounter();
 
-    ZunBool ReadMidiFile(u32 midiFileIdx, const char *path);
-    ZunBool PlayMidiFile(i32 midiFileIdx);
+    bool ReadMidiFile(u32 midiFileIdx, const char *path);
+    ZunResult PlayMidiFile(i32 midiFileIdx);
     ZunResult PlayAudio(const char *path);
     ZunResult StopAudio();
-    ZunResult SetupMidiPlayback(const char *path);
     ZunResult FadeOutMusic(f32 fadeOutSeconds);
 
-    BOOL LoadPbg3(i32 pbg3FileIdx, const char *filename);
+    static ZunResult SetupDInput(Supervisor *s);
+
+    i32 LoadPbg3(i32 pbg3FileIdx, const char *filename);
     void ReleasePbg3(i32 pbg3FileIdx);
 
     ZunResult LoadConfig(const char *path);
 
     void TickTimer(i32 *frames, f32 *subframes);
 
-    f32 FramerateMultiplier()
+    f32 FramerateMultiplier() const
     {
         return this->effectiveFramerateMultiplier;
     }
 
-    i32 GetMusicMode()
+    u32 RedrawWholeFrame() const
     {
-        return this->cfg.musicMode;
+        // SDL makes no guarantees about frame state after buffer swap,
+        //   and Wayland will "reuse" old framebuffers in a nondeterministic
+        //   way, so we're basically required to always redraw to avoid UI corruption
+        return (this->cfg.opts >> GCOS_CLEAR_BACKBUFFER_ON_REFRESH & 1) |
+               (this->cfg.opts >> GCOS_DISPLAY_MINIMUM_GRAPHICS & 1) | 1;
     }
 
-    ZunBool IsHardwareBlendingDisabled()
+    u32 ShouldRunAt60Fps() const
     {
-        return this->cfg.opts.useSwTextureBlending;
+        return (this->cfg.opts >> GCOS_FORCE_60FPS & 1) || this->vsyncEnabled;
     }
 
-    ZunBool IsVertexBufferDisabled()
+    void SetProjectionFrustum(ZunMatrix p)
     {
-        return this->cfg.opts.dontUseVertexBuf;
+        frustumTop.x = p.m[0][3] - p.m[0][1];
+        frustumTop.y = p.m[1][3] - p.m[1][1];
+        frustumTop.z = p.m[2][3] - p.m[2][1];
+        frustumTop.w = p.m[3][3] - p.m[3][1];
+        frustumBottom.x = p.m[0][3] + p.m[0][1];
+        frustumBottom.y = p.m[1][3] + p.m[1][1];
+        frustumBottom.z = p.m[2][3] + p.m[2][1];
+        frustumBottom.w = p.m[3][3] + p.m[3][1];
     }
 
-    ZunBool Is16bitColorMode()
-    {
-        return this->cfg.opts.force16bitColorMode;
-    }
-
-    ZunBool IsMinimumGraphicsMode()
-    {
-        return this->cfg.opts.displayMinimumGraphics;
-    }
-
-    ZunBool IsShadingDisabled()
-    {
-        return this->cfg.opts.suppressUseOfGoroudShading;
-    }
-
-    ZunBool IsDepthTestDisabled()
-    {
-        return this->cfg.opts.disableDepthTest;
-    }
-
-    ZunBool IsForced60Fps()
-    {
-        return this->cfg.opts.force60Fps;
-    }
-
-    ZunBool IsColorCompositingDisabled()
-    {
-        return this->cfg.opts.disableColorCompositing;
-    }
-
-    ZunBool IsReferenceRasterizerMode()
-    {
-        return this->cfg.opts.referenceRasterizerMode;
-    }
-
-    ZunBool IsFogDisabled()
-    {
-        return this->cfg.opts.disableFog;
-    }
-
-    ZunBool IsDInputDisabled()
-    {
-        return this->cfg.opts.dontUseDirectInput;
-    }
-
-    ZunBool ShouldForceBackbufferClear()
-    {
-        return this->cfg.opts.clearBackBufferOnRefresh | this->IsMinimumGraphicsMode();
-    }
-
-    u32 IsSoftwareTexturing()
-    {
-        return this->IsColorCompositingDisabled() | this->IsHardwareBlendingDisabled();
-    }
-
-    ZunBool ShouldRunAt60Fps()
-    {
-        return this->IsForced60Fps() && this->vsyncEnabled;
-    }
-
-    ZunBool IsWindowed()
-    {
-        return this->cfg.windowed;
-    }
-
-    ZunBool IsNotLoadingNextStage()
-    {
-        return this->curState != SUPERVISOR_STATE_NEXT_STAGE;
-    }
-
-    HINSTANCE hInstance;
-    LPDIRECT3D8 d3dIface;
-    LPDIRECT3DDEVICE8 d3dDevice;
-    LPDIRECTINPUT8 dinputIface;
-    LPDIRECTINPUTDEVICE8 keyboard;
-    LPDIRECTINPUTDEVICE8 controller;
-    DIDEVCAPS controllerCaps;
-    HWND hwndGameWindow;
-    D3DXMATRIX viewMatrix;
-    D3DXMATRIX projectionMatrix;
-    D3DVIEWPORT8 viewport;
-    D3DPRESENT_PARAMETERS presentParameters;
+    //    HINSTANCE hInstance;
+    //    PDIRECT3D8 d3dIface;
+    //    PDIRECT3DDEVICE8 d3dDevice;
+    //    LPDIRECTINPUT8 dinputIface;
+    //    LPDIRECTINPUTDEVICE8A keyboard;
+    //    LPDIRECTINPUTDEVICE8A controller;
+    SDL_GameController *gameController;
+    //    DIDEVCAPS controllerCaps;
+    //    SDL_Window *gameWindow;
+    ZunMatrix viewMatrix;
+    ZunMatrix projectionMatrix;
+    ZunViewport viewport;
+    //    D3DPRESENT_PARAMETERS presentParameters;
     GameConfiguration cfg;
-#if BUILD_VERSION >= BUILD_VERSION_102h
-    // NOTE: This is not even close to a default config
     GameConfiguration defaultConfig;
-#endif
     i32 calcCount;
     i32 wantedState;
     i32 curState;
-    i32 prevState;
+    i32 wantedState2;
 
-    unreferenced_fields(0x4);
-    i32 forceRedrawFrames;
-    ZunBool isInEnding;
+    i32 unk194;
+    i32 unk198;
+    bool isInEnding;
 
-    ZunBool vsyncEnabled;
-    i32 lastFrameTime;
+    i32 vsyncEnabled;
+    u32 lastFrameTime;
     f32 effectiveFramerateMultiplier;
     f32 framerateMultiplier;
 
@@ -285,19 +193,19 @@ struct Supervisor
     u8 hasD3dHardwareVertexProcessing;
     u8 lockableBackbuffer;
     u8 colorMode16Bits;
-    alignment_padding(0x1);
 
     u32 startupTimeBeforeMenuMusic;
-    D3DCAPS8 d3dCaps;
+
+    ZunVec4 frustumTop;
+    ZunVec4 frustumBottom;
+
+    //    D3DCAPS8 d3dCaps;
 };
-ZunResult Supervisor_RegisterChain();
 
-#if BUILD_VERSION >= BUILD_VERSION_102h
-ZUN_ASSERT_SIZE(Supervisor, 0x4d8);
-#else
-ZUN_ASSERT_SIZE(Supervisor, 0x4a0);
-#endif
-
+extern ControllerMapping g_ControllerMapping;
 extern Supervisor g_Supervisor;
-
-} // namespace th06
+extern u16 g_LastFrameInput;
+extern u16 g_CurFrameInput;
+extern u16 g_IsEigthFrameOfHeldInput;
+extern SDL_Surface *g_TextBufferSurface;
+extern u16 g_NumOfFramesInputsWereHeld;

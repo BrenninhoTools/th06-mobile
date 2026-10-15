@@ -1,45 +1,51 @@
-#include "stdafx.h"
-
 #include "ScreenEffect.hpp"
+#include "AnmManager.hpp"
 #include "ChainPriorities.hpp"
+#include "GameWindow.hpp"
+#include "Rng.hpp"
+#include "Supervisor.hpp"
 
-namespace th06
-{
-AUTO_BSS_SORT(R1);
-ScreenEffect g_ScreenEffect; // UNUSED FOREVER
+#include <SDL2/SDL_video.h>
+#include <cstring>
 
-void ScreenEffect_Clear(D3DCOLOR color)
+void ScreenEffect::Clear(ZunColor color)
 {
-    g_Supervisor.d3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, color, 1.0f, 0);
-    if (FAILED(g_Supervisor.d3dDevice->Present(NULL, NULL, NULL, NULL)))
-    {
-        g_Supervisor.d3dDevice->Reset(&g_Supervisor.presentParameters);
-    }
-    g_Supervisor.d3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, color, 1.0f, 0);
-    if (FAILED(g_Supervisor.d3dDevice->Present(NULL, NULL, NULL, NULL)))
-    {
-        g_Supervisor.d3dDevice->Reset(&g_Supervisor.presentParameters);
-    }
+    f32 a = (color >> 24) / 255.0f;
+    f32 r = ((color >> 16) & 0xFF) / 255.0f;
+    f32 g = ((color >> 8) & 0xFF) / 255.0f;
+    f32 b = (color & 0xFF) / 255.0f;
+
+    g_GfxBackend->SetClearColor(r, g, b, a);
+
+    // D3D version clears and presents twice (probably to clear both draw buffers?)
+    // For now let's copy that behaviour
+
+    g_GfxBackend->Clear(CLEAR_COLOR_BUFFER | CLEAR_DEPTH_BUFFER);
+    g_GfxBackend->SwapBuffers();
+    g_GfxBackend->Clear(CLEAR_COLOR_BUFFER | CLEAR_DEPTH_BUFFER);
+    g_GfxBackend->SwapBuffers();
+
+    return;
 }
 
 // Why is this not in GameWindow.cpp? Don't ask me...
-void ScreenEffect_SetViewport(D3DCOLOR color)
+void ScreenEffect::SetViewport(ZunColor color)
 {
-    g_Supervisor.viewport.X = 0;
-    g_Supervisor.viewport.Y = 0;
-    g_Supervisor.viewport.Width = GAME_WINDOW_WIDTH;
-    g_Supervisor.viewport.Height = GAME_WINDOW_HEIGHT;
-    g_Supervisor.viewport.MinZ = 0.0f;
-    g_Supervisor.viewport.MaxZ = 1.0f;
-    g_Supervisor.d3dDevice->SetViewport(&g_Supervisor.viewport);
-    ScreenEffect_Clear(color);
+    g_Supervisor.viewport.x = 0;
+    g_Supervisor.viewport.y = 0;
+    g_Supervisor.viewport.width = GAME_WINDOW_WIDTH;
+    g_Supervisor.viewport.height = GAME_WINDOW_HEIGHT;
+    g_Supervisor.viewport.minZ = 0.0;
+    g_Supervisor.viewport.maxZ = 1.0;
+    g_Supervisor.viewport.Set();
+    ScreenEffect::Clear(color);
 }
 
-ChainCallbackResult ScreenEffect_CalcFadeIn(ScreenEffect *effect)
+ChainCallbackResult ScreenEffect::CalcFadeIn(ScreenEffect *effect)
 {
     if (effect->effectLength != 0)
     {
-        effect->fadeAlpha = 255.0f - (((f32)effect->timer * 255.0f) / effect->effectLength);
+        effect->fadeAlpha = 255.0f - ((effect->timer.AsFramesFloat() * 255.0f) / effect->effectLength);
         if (effect->fadeAlpha < 0)
         {
             effect->fadeAlpha = 0;
@@ -51,59 +57,58 @@ ChainCallbackResult ScreenEffect_CalcFadeIn(ScreenEffect *effect)
         return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
     }
 
-    effect->timer++;
+    effect->timer.Tick();
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-void ScreenEffect_DrawSquare(ZunRect *rect, D3DCOLOR rectColor)
+void ScreenEffect::DrawSquare(const ZunRect *rect, ZunColor rectColor)
 {
-    VertexDiffuseXyzrwh vertices[4];
+    VertexDiffuseXyzrhw vertices[4];
 
-    vertices[0].position = D3DXVECTOR3(rect->left, rect->top, 0.0f);
-    vertices[1].position = D3DXVECTOR3(rect->right, rect->top, 0.0f);
-    vertices[2].position = D3DXVECTOR3(rect->left, rect->bottom, 0.0f);
-    vertices[3].position = D3DXVECTOR3(rect->right, rect->bottom, 0.0f);
-    vertices[0].position_w = vertices[1].position_w = vertices[2].position_w = vertices[3].position_w = 1.0f;
-    vertices[0].diffuse = vertices[1].diffuse = vertices[2].diffuse = vertices[3].diffuse = rectColor;
-
-    if (!g_Supervisor.IsColorCompositingDisabled())
+    if (g_AnmManager->currentTextureHandle == 0)
     {
-        g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-        g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-    }
-    g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
-    g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
-    if (!g_Supervisor.IsDepthTestDisabled())
-    {
-        g_Supervisor.d3dDevice->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
-        g_Supervisor.d3dDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+        g_AnmManager->SetCurrentTexture(g_AnmManager->dummyTextureHandle);
     }
 
-    g_Supervisor.d3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-    g_Supervisor.d3dDevice->SetVertexShader(D3DFVF_DIFFUSE | D3DFVF_XYZRHW);
-    g_Supervisor.d3dDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, vertices, sizeof(VertexDiffuseXyzrwh));
-    g_AnmManager->SetCurrentVertexShader(AnmVertexShader_NotSet);
+    vertices[0].position = ZunVec4(rect->left, rect->top, 0.0f, 1.0f);
+    vertices[1].position = ZunVec4(rect->right, rect->top, 0.0f, 1.0f);
+    vertices[2].position = ZunVec4(rect->left, rect->bottom, 0.0f, 1.0f);
+    vertices[3].position = ZunVec4(rect->right, rect->bottom, 0.0f, 1.0f);
+
+    vertices[0].diffuse = vertices[1].diffuse = vertices[2].diffuse = vertices[3].diffuse = ColorData(rectColor);
+
+    g_AnmManager->SetProjectionMode(PROJECTION_MODE_ORTHOGRAPHIC);
+
+    g_AnmManager->SetVertexAttributes(VERTEX_ATTR_DIFFUSE);
+
+    g_AnmManager->SetAttributePointer(VERTEX_ARRAY_POSITION, sizeof(*vertices), &vertices[0].position);
+    g_AnmManager->SetAttributePointer(VERTEX_ARRAY_DIFFUSE, sizeof(*vertices), &vertices[0].diffuse);
+
+    g_AnmManager->SetColorOp(COMPONENT_ALPHA, COLOR_OP_REPLACE);
+    g_AnmManager->SetColorOp(COMPONENT_RGB, COLOR_OP_REPLACE);
+
+    g_AnmManager->SetDepthMask(false);
+    g_AnmManager->SetDepthFunc(DEPTH_FUNC_ALWAYS);
+
+    g_GfxBackend->SetBlendMode(BLEND_INV_SRC_ALPHA);
+
+    g_AnmManager->BackendDrawCall();
+
     g_AnmManager->SetCurrentSprite(NULL);
-    g_AnmManager->SetCurrentTexture(NULL);
-    g_AnmManager->SetCurrentColorOp(AnmColorOp_NotSet);
-    g_AnmManager->SetCurrentBlendMode(AnmBlendMode_NotSet);
-    g_AnmManager->SetCurrentZWriteDisable(AnmZWriteState_NotSet);
+    g_AnmManager->SetCurrentTexture(0);
+    g_AnmManager->SetCurrentBlendMode(0xff);
 
-    if (!g_Supervisor.IsColorCompositingDisabled())
-    {
-        g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-        g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-    }
-    g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-    g_Supervisor.d3dDevice->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-    g_Supervisor.d3dDevice->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    g_AnmManager->SetColorOp(COMPONENT_ALPHA, COLOR_OP_MODULATE);
+    g_AnmManager->SetColorOp(COMPONENT_RGB, COLOR_OP_MODULATE);
+
+    g_AnmManager->SetDepthFunc(DEPTH_FUNC_LEQUAL);
 }
 
-ChainCallbackResult ScreenEffect_CalcFadeOut(ScreenEffect *effect)
+ChainCallbackResult ScreenEffect::CalcFadeOut(ScreenEffect *effect)
 {
     if (effect->effectLength != 0)
     {
-        effect->fadeAlpha = ((f32)effect->timer * 255.0f) / effect->effectLength;
+        effect->fadeAlpha = (effect->timer.AsFramesFloat() * 255.0f) / effect->effectLength;
         if (effect->fadeAlpha < 0)
         {
             effect->fadeAlpha = 0;
@@ -115,145 +120,45 @@ ChainCallbackResult ScreenEffect_CalcFadeOut(ScreenEffect *effect)
         return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
     }
 
-    effect->timer++;
+    effect->timer.Tick();
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-static ChainCallbackResult ScreenEffect_DrawFadeIn(ScreenEffect *effect)
+ScreenEffect *ScreenEffect::RegisterChain(i32 effect, u32 ticks, u32 effectParam1, u32 effectParam2,
+                                          u32 unusedEffectParam)
 {
-    ZunRect fadeRect;
+    ChainElem *calcChainElem;
+    ScreenEffect *createdEffect;
+    ChainElem *drawChainElem;
 
-    fadeRect.left = 0.0f;
-    fadeRect.top = 0.0f;
-    fadeRect.right = GAME_WINDOW_WIDTH;
-    fadeRect.bottom = GAME_WINDOW_HEIGHT;
-    g_Supervisor.viewport.X = 0;
-    g_Supervisor.viewport.Y = 0;
-    g_Supervisor.viewport.Width = GAME_WINDOW_WIDTH;
-    g_Supervisor.viewport.Height = GAME_WINDOW_HEIGHT;
-    g_Supervisor.d3dDevice->SetViewport(&g_Supervisor.viewport);
-    ScreenEffect_DrawSquare(&fadeRect, (effect->fadeAlpha << 24) | effect->genericParam);
-    return CHAIN_CALLBACK_RESULT_CONTINUE;
-}
+    calcChainElem = NULL;
+    drawChainElem = NULL;
 
-static ChainCallbackResult ScreenEffect_DrawFadeOut(ScreenEffect *effect)
-{
-    ZunRect fadeRect;
-    fadeRect.left = GAME_REGION_POS_X;
-    fadeRect.top = GAME_REGION_POS_Y;
-    fadeRect.right = GAME_REGION_POS_RIGHT;
-    fadeRect.bottom = GAME_REGION_POS_BOTTOM;
-    ScreenEffect_DrawSquare(&fadeRect, (effect->fadeAlpha << 24) | effect->genericParam);
-    return CHAIN_CALLBACK_RESULT_CONTINUE;
-}
-
-static ChainCallbackResult ScreenEffect_ShakeScreen(ScreenEffect *effect)
-{
-    if (g_GameManager.isTimeStopped)
-    {
-        g_GameManager.gameRegionScreenPos.x = GAME_REGION_POS_X;
-        g_GameManager.gameRegionScreenPos.y = GAME_REGION_POS_Y;
-        g_GameManager.gameRegionSize.x = GAME_REGION_WIDTH;
-        g_GameManager.gameRegionSize.y = GAME_REGION_HEIGHT;
-        return CHAIN_CALLBACK_RESULT_CONTINUE;
-    }
-
-    effect->timer++;
-    if (effect->timer >= effect->effectLength)
-    {
-        g_GameManager.gameRegionScreenPos.x = GAME_REGION_POS_X;
-        g_GameManager.gameRegionScreenPos.y = GAME_REGION_POS_Y;
-        g_GameManager.gameRegionSize.x = GAME_REGION_WIDTH;
-        g_GameManager.gameRegionSize.y = GAME_REGION_HEIGHT;
-        return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
-    }
-
-    f32 screenOffset = (((f32)effect->timer * (effect->shakinessParam - effect->genericParam)) / effect->effectLength) +
-                       effect->genericParam;
-
-    switch (g_Rng.GetRandomU32InRange(3))
-    {
-    case 0:
-        g_GameManager.gameRegionScreenPos.x = GAME_REGION_POS_X;
-        g_GameManager.gameRegionSize.x = GAME_REGION_WIDTH;
-        break;
-    case 1:
-        g_GameManager.gameRegionScreenPos.x = GAME_REGION_POS_X + screenOffset;
-        g_GameManager.gameRegionSize.x = GAME_REGION_WIDTH - screenOffset;
-        break;
-    case 2:
-        g_GameManager.gameRegionScreenPos.x = GAME_REGION_POS_X;
-        g_GameManager.gameRegionSize.x = GAME_REGION_WIDTH - screenOffset;
-        break;
-    }
-
-    switch (g_Rng.GetRandomU32InRange(3))
-    {
-    case 0:
-        g_GameManager.gameRegionScreenPos.y = GAME_REGION_POS_Y;
-        g_GameManager.gameRegionSize.y = GAME_REGION_HEIGHT;
-        break;
-    case 1:
-        g_GameManager.gameRegionScreenPos.y = GAME_REGION_POS_Y + screenOffset;
-        g_GameManager.gameRegionSize.y = GAME_REGION_HEIGHT - screenOffset;
-        break;
-    case 2:
-        g_GameManager.gameRegionScreenPos.y = GAME_REGION_POS_Y;
-        g_GameManager.gameRegionSize.y = GAME_REGION_HEIGHT - screenOffset;
-        break;
-    }
-
-    return CHAIN_CALLBACK_RESULT_CONTINUE;
-}
-
-static ZunResult ScreenEffect_AddedCallback(ScreenEffect *effect)
-{
-    effect->timer = 0;
-    return ZUN_SUCCESS;
-}
-
-static ZunResult ScreenEffect_DeletedCallback(ScreenEffect *effect)
-{
-    effect->calcChainElement->deletedCallback = NULL;
-    g_Chain.Cut(effect->drawChainElement);
-    effect->drawChainElement = NULL;
-    ZUN_DELETE(effect);
-
-    return ZUN_SUCCESS;
-}
-
-#pragma var_order(calcChainElem, drawChainElem, createdEffect)
-ScreenEffect *ScreenEffect_RegisterChain(i32 effect, u32 ticks, u32 effectParam1, u32 effectParam2,
-                                         u32 unusedEffectParam)
-{
-    ChainElem *calcChainElem = NULL;
-    ChainElem *drawChainElem = NULL;
-
-    ScreenEffect *createdEffect = ZUN_NEW(ScreenEffect);
+    createdEffect = new ScreenEffect;
 
     if (createdEffect == NULL)
     {
         return NULL;
     }
 
-    memset(createdEffect, 0, sizeof(*createdEffect));
+    std::memset(createdEffect, 0, sizeof(*createdEffect));
 
     switch (effect)
     {
     case SCREEN_EFFECT_FADE_IN:
-        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect_CalcFadeIn);
-        drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect_DrawFadeIn);
+        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::CalcFadeIn);
+        drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::DrawFadeIn);
         break;
     case SCREEN_EFFECT_SHAKE:
-        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect_ShakeScreen);
+        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::ShakeScreen);
         break;
     case SCREEN_EFFECT_FADE_OUT:
-        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect_CalcFadeOut);
-        drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect_DrawFadeOut);
+        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::CalcFadeOut);
+        drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::DrawFadeOut);
     }
 
-    calcChainElem->addedCallback = (ChainAddedCallback)ScreenEffect_AddedCallback;
-    calcChainElem->deletedCallback = (ChainAddedCallback)ScreenEffect_DeletedCallback;
+    calcChainElem->addedCallback = (ChainAddedCallback)ScreenEffect::AddedCallback;
+    calcChainElem->deletedCallback = (ChainAddedCallback)ScreenEffect::DeletedCallback;
     calcChainElem->arg = createdEffect;
     createdEffect->usedEffect = (ScreenEffects)effect;
     createdEffect->effectLength = ticks;
@@ -261,7 +166,7 @@ ScreenEffect *ScreenEffect_RegisterChain(i32 effect, u32 ticks, u32 effectParam1
     createdEffect->shakinessParam = effectParam2;
     createdEffect->unusedParam = unusedEffectParam;
 
-    if (g_Chain.AddToCalcChain(calcChainElem, TH_CHAIN_PRIO_CALC_SCREENEFFECT) != ZUN_SUCCESS)
+    if (g_Chain.AddToCalcChain(calcChainElem, TH_CHAIN_PRIO_CALC_SCREENEFFECT) != 0)
     {
         return NULL;
     }
@@ -276,4 +181,112 @@ ScreenEffect *ScreenEffect_RegisterChain(i32 effect, u32 ticks, u32 effectParam1
     createdEffect->drawChainElement = drawChainElem;
     return createdEffect;
 }
-} // namespace th06
+
+ChainCallbackResult ScreenEffect::DrawFadeIn(ScreenEffect *effect)
+{
+    ZunRect fadeRect;
+
+    fadeRect.left = 0.0f;
+    fadeRect.top = 0.0f;
+    fadeRect.right = GAME_WINDOW_WIDTH;
+    fadeRect.bottom = GAME_WINDOW_HEIGHT;
+    g_Supervisor.viewport.x = 0;
+    g_Supervisor.viewport.y = 0;
+    g_Supervisor.viewport.width = GAME_WINDOW_WIDTH;
+    g_Supervisor.viewport.height = GAME_WINDOW_HEIGHT;
+    g_AnmManager->SetProjectionMode(PROJECTION_MODE_PERSPECTIVE);
+    g_Supervisor.viewport.Set();
+    ScreenEffect::DrawSquare(&fadeRect, (effect->fadeAlpha << 24) | effect->genericParam);
+    return CHAIN_CALLBACK_RESULT_CONTINUE;
+}
+
+ChainCallbackResult ScreenEffect::DrawFadeOut(ScreenEffect *effect)
+{
+    ZunRect fadeRect;
+
+    fadeRect.left = 32.0f;
+    fadeRect.top = 16.0f;
+    fadeRect.right = 416.0f;
+    fadeRect.bottom = 464.0f;
+    ScreenEffect::DrawSquare(&fadeRect, (effect->fadeAlpha << 24) | effect->genericParam);
+    return CHAIN_CALLBACK_RESULT_CONTINUE;
+}
+
+ChainCallbackResult ScreenEffect::ShakeScreen(ScreenEffect *effect)
+{
+    f32 screenOffset;
+
+    if (g_GameManager.isTimeStopped)
+    {
+        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
+        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
+        g_GameManager.arcadeRegionSize.x = 384.0f;
+        g_GameManager.arcadeRegionSize.y = 448.0f;
+        return CHAIN_CALLBACK_RESULT_CONTINUE;
+    }
+
+    effect->timer.Tick();
+    if (effect->timer >= effect->effectLength)
+    {
+        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
+        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
+        g_GameManager.arcadeRegionSize.x = 384.0f;
+        g_GameManager.arcadeRegionSize.y = 448.0f;
+        return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
+    }
+
+    screenOffset =
+        ((effect->timer.AsFramesFloat() * (effect->shakinessParam - effect->genericParam)) / effect->effectLength) +
+        effect->genericParam;
+
+    switch (g_Rng.GetRandomU32InRange(3))
+    {
+    case 0:
+        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
+        g_GameManager.arcadeRegionSize.x = 384.0f;
+        break;
+    case 1:
+        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f + screenOffset;
+        g_GameManager.arcadeRegionSize.x = 384.0f - screenOffset;
+        break;
+    case 2:
+        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
+        g_GameManager.arcadeRegionSize.x = 384.0f - screenOffset;
+        break;
+    }
+
+    switch (g_Rng.GetRandomU32InRange(3))
+    {
+    case 0:
+        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
+        g_GameManager.arcadeRegionSize.y = 448.0f;
+        break;
+    case 1:
+        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f + screenOffset;
+        g_GameManager.arcadeRegionSize.y = 448.0f - screenOffset;
+        break;
+    case 2:
+        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
+        g_GameManager.arcadeRegionSize.y = 448.0f - screenOffset;
+        break;
+    }
+
+    return CHAIN_CALLBACK_RESULT_CONTINUE;
+}
+
+ZunResult ScreenEffect::AddedCallback(ScreenEffect *effect)
+{
+    effect->timer.InitializeForPopup();
+    return ZUN_SUCCESS;
+}
+
+ZunResult ScreenEffect::DeletedCallback(ScreenEffect *effect)
+{
+    effect->calcChainElement->deletedCallback = NULL;
+    g_Chain.Cut(effect->drawChainElement);
+    effect->drawChainElement = NULL;
+    delete effect;
+    effect = NULL;
+
+    return ZUN_SUCCESS;
+}

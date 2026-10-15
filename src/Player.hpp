@@ -1,18 +1,14 @@
 #pragma once
-#include <d3dx8math.h>
-#include <math.h>
 
 #include "AnmManager.hpp"
 #include "AnmVm.hpp"
 #include "BulletManager.hpp"
 #include "Chain.hpp"
 #include "GameManager.hpp"
-#include "ZunBool.hpp"
+#include "ZunMath.hpp"
 #include "ZunResult.hpp"
-#include "decomp.hpp"
+#include "inttypes.hpp"
 
-namespace th06
-{
 struct Player;
 
 enum PlayerDirection
@@ -30,8 +26,8 @@ enum PlayerDirection
 
 enum Character
 {
-    REIMU,
-    MARISA,
+    CHARA_REIMU,
+    CHARA_MARISA,
 };
 
 enum ShotType
@@ -40,12 +36,12 @@ enum ShotType
     SHOT_TYPE_B,
 };
 
-enum PlayerBulletType
+enum BulletType
 {
-    PLAYER_BULLET_TYPE_0,
-    PLAYER_BULLET_TYPE_1,
-    PLAYER_BULLET_TYPE_2,
-    PLAYER_LASER
+    BULLET_TYPE_0,
+    BULLET_TYPE_1,
+    BULLET_TYPE_2,
+    BULLET_TYPE_LASER
 };
 
 enum PlayerState
@@ -65,36 +61,34 @@ enum OrbState
     ORB_UNFOCUSING,
 };
 
-enum PlayerBulletState
+enum BulletState
 {
-    PLAYER_BULLET_STATE_INACTIVE,
-    PLAYER_BULLET_STATE_FIRED,
-    PLAYER_BULLET_STATE_COLLIDED,
+    BULLET_STATE_UNUSED,
+    BULLET_STATE_FIRED,
+    BULLET_STATE_COLLIDED,
 };
-
 struct PlayerRect
 {
-    ZunVec2 pos;
-    ZunVec2 size;
+    f32 posX;
+    f32 posY;
+    f32 sizeX;
+    f32 sizeY;
 };
-ZUN_ASSERT_TYPE(PlayerRect, 0x10, 4);
 
 struct PlayerBullet
 {
     AnmVm sprite;
-    D3DXVECTOR3 position;
-    D3DXVECTOR3 size;
+    ZunVec3 position;
+    ZunVec3 size;
     ZunVec2 velocity;
-    ZunVec2 motion;
-    f32 speed;
-    f32 angle;
-    ZunTimer lifetime;
+    f32 sidewaysMotion;
+    ZunVec3 unk_134;
+    ZunTimer unk_140;
     i16 damage;
     i16 bulletState;
     i16 bulletType;
-    i16 bulletFrame;
+    i16 unk_152;
     i16 spawnPositionIdx;
-    alignment_padding(0x2);
 
     void MoveHorizontal(f32 *position)
     {
@@ -108,22 +102,20 @@ struct PlayerBullet
         this->sprite.pos.y = *position;
     }
 };
-ZUN_ASSERT_TYPE(PlayerBullet, 0x158, 4);
 
 struct PlayerBombInfo
 {
-    ZunBool isInUse;
+    u32 isInUse;
     i32 duration;
     ZunTimer timer;
     void (*calc)(Player *p);
     void (*draw)(Player *p);
     i32 reimuABombProjectilesState[8];
     f32 reimuABombProjectilesRelated[8];
-    D3DXVECTOR3 bombRegionPositions[8];
-    D3DXVECTOR3 bombRegionVelocities[8];
+    ZunVec3 bombRegionPositions[8];
+    ZunVec3 bombRegionVelocities[8];
     AnmVm sprites[8][4];
 };
-ZUN_ASSERT_TYPE(PlayerBombInfo, 0x231c, 4);
 
 typedef i32 FireBulletResult;
 #define FBR_STOP_SPAWNING (-2)
@@ -139,7 +131,6 @@ struct CharacterData
     FireBulletCallback fireBulletCallback;
     FireBulletCallback fireBulletFocusCallback;
 };
-ZUN_ASSERT_TYPE(CharacterData, 0x18, 4);
 
 struct CharacterPowerBulletData
 {
@@ -149,75 +140,94 @@ struct CharacterPowerBulletData
     ZunVec2 size;
     f32 direction;
     f32 velocity;
-    u16 damage;
+    u16 unk_1c;
     u8 spawnPositionIdx;
     u8 bulletType;
     i16 anmFileIdx;
     i16 bulletSoundIdx;
 };
-ZUN_ASSERT_TYPE(CharacterPowerBulletData, 0x24, 4);
 
 struct CharacterPowerData
 {
     i32 numBullets;
     i32 power;
-    CharacterPowerBulletData *bullets;
+    const CharacterPowerBulletData *bullets;
 };
-ZUN_ASSERT_TYPE(CharacterPowerData, 0xc, 4);
-
-#define MAX_PLAYER_BULLETS 80
-#define PLAYER_BOMB_REGION_COUNT 32
-#define PLAYER_BOMB_PROJECTILE_COUNT 16
 
 struct Player
 {
-    ZunResult HandlePlayerInputs();
+    Player();
 
-    f32 AngleFromPlayer(D3DXVECTOR3 *pos);
-    f32 AngleToPlayer(D3DXVECTOR3 *pos);
-    i32 CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
-    i32 CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletSize);
-    i32 CalcLaserHitbox(D3DXVECTOR3 *laserCenter, D3DXVECTOR3 *laserSize, D3DXVECTOR3 *rotation, f32 angle,
-                        ZunBool canGraze);
-    i32 CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemySize, ZunBool *hitByBomb);
-    ZunBool CalcItemBoxCollision(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
-    void ScoreGraze(D3DXVECTOR3 *center);
+    static ZunResult RegisterChain(u8 unk);
+    static void CutChain();
+    static ChainCallbackResult OnUpdate(Player *p);
+    static ChainCallbackResult OnDrawHighPrio(Player *p);
+    static ChainCallbackResult OnDrawLowPrio(Player *p);
+    static ZunResult AddedCallback(Player *p);
+    static ZunResult DeletedCallback(Player *p);
+
+    static FireBulletResult FireSingleBullet(Player *, PlayerBullet *bullet, i32 bullet_idx, i32 framesSinceLastBullet,
+                                             const CharacterPowerData *powerData);
+
+    static FireBulletResult FireBulletReimuA(Player *, PlayerBullet *, u32, u32);
+    static FireBulletResult FireBulletReimuB(Player *, PlayerBullet *, u32, u32);
+    static FireBulletResult FireBulletMarisaA(Player *, PlayerBullet *, u32, u32);
+    static FireBulletResult FireBulletMarisaB(Player *, PlayerBullet *, u32, u32);
+
+    static void StartFireBulletTimer(Player *);
+    ZunResult HandlePlayerInputs();
+    static void UpdatePlayerBullets(Player *);
+    static ZunResult UpdateFireBulletsTimer(Player *);
+
+    static void SpawnBullets(Player *, u32 timer);
+    static void DrawBullets(Player *p);
+    static void DrawBulletExplosions(Player *p);
+
+    f32 AngleFromPlayer(const ZunVec3 *pos) const;
+    f32 AngleToPlayer(const ZunVec3 *pos) const;
+    i32 CheckGraze(const ZunVec3 *center, const ZunVec3 *size) const;
+    i32 CalcKillBoxCollision(const ZunVec3 *bulletCenter, const ZunVec3 *bulletSize);
+    i32 CalcLaserHitbox(const ZunVec3 *laserCenter, const ZunVec3 *laserSize, const ZunVec3 *rotation, f32 angle,
+                        i32 canGraze);
+    i32 CalcDamageToEnemy(const ZunVec3 *enemyPos, const ZunVec3 *enemySize, bool *unk);
+    i32 CalcItemBoxCollision(const ZunVec3 *center, const ZunVec3 *size) const;
+    void ScoreGraze(const ZunVec3 *center) const;
     void Die();
 
     AnmVm playerSprite;
-    AnmVm orbsSprite[3]; // why is this 3?
-    D3DXVECTOR3 positionCenter;
-    unused_field(D3DXVECTOR3);
-    D3DXVECTOR3 hitboxTopLeft;
-    D3DXVECTOR3 hitboxBottomRight;
-    D3DXVECTOR3 grabItemTopLeft;
-    D3DXVECTOR3 grabItemBottomRight;
-    D3DXVECTOR3 hitboxSize;
-    D3DXVECTOR3 grabItemSize;
-    D3DXVECTOR3 orbsPosition[2];
-    D3DXVECTOR3 bombRegionPositions[PLAYER_BOMB_REGION_COUNT];
-    D3DXVECTOR3 bombRegionSizes[PLAYER_BOMB_REGION_COUNT];
-    i32 bombRegionDamages[PLAYER_BOMB_REGION_COUNT];
-    i32 bombRegionTotalDamages[PLAYER_BOMB_REGION_COUNT];
-    PlayerRect bombProjectiles[PLAYER_BOMB_PROJECTILE_COUNT];
+    AnmVm orbsSprite[3];
+    ZunVec3 positionCenter;
+    ZunVec3 unk_44c;
+    ZunVec3 hitboxTopLeft;
+    ZunVec3 hitboxBottomRight;
+    ZunVec3 grabItemTopLeft;
+    ZunVec3 grabItemBottomRight;
+    ZunVec3 hitboxSize;
+    ZunVec3 grabItemSize;
+    ZunVec3 orbsPosition[2];
+    ZunVec3 bombRegionPositions[32];
+    ZunVec3 bombRegionSizes[32];
+    i32 bombRegionDamages[32];
+    i32 unk_838[32];
+    PlayerRect bombProjectiles[16];
     ZunTimer laserTimer[2];
-    ZunVec2 speedMultiplierDuringBomb;
+    f32 horizontalMovementSpeedMultiplierDuringBomb;
+    f32 verticalMovementSpeedMultiplierDuringBomb;
     i32 respawnTimer;
     i32 bulletGracePeriod;
     i8 playerState;
     u8 unk_9e1;
     i8 orbState;
     i8 isFocus;
-    u8 particleTimer;
-    alignment_padding(0x3);
+    u8 unk_9e4;
     ZunTimer focusMovementTimer;
     CharacterData characterData;
     PlayerDirection playerDirection;
-    ZunVec2 previousSpeed;
+    f32 previousHorizontalSpeed;
+    f32 previousVerticalSpeed;
     i16 previousFrameInput;
-    alignment_padding(0x2);
-    D3DXVECTOR3 positionOfLastEnemyHit;
-    PlayerBullet bullets[MAX_PLAYER_BULLETS];
+    ZunVec3 positionOfLastEnemyHit;
+    PlayerBullet bullets[80];
     ZunTimer fireBulletTimer;
     ZunTimer invulnerabilityTimer;
     FireBulletCallback fireBulletCallback;
@@ -227,17 +237,15 @@ struct Player
     ChainElem *chainDraw1;
     ChainElem *chainDraw2;
 
-    void ApplyGameRegionOffset(AnmVm *sprite)
+    inline void SetToTopLeftPos(AnmVm *sprite) const
     {
-        sprite->pos[0] += g_GameManager.gameRegionScreenPos.x;
-        sprite->pos[1] += g_GameManager.gameRegionScreenPos.y;
-        sprite->pos[2] = 0.0f;
-    }
-};
-ZUN_ASSERT_TYPE(Player, 0x98f0, 4);
 
-ZunResult Player_RegisterChain(u8 unk);
-void Player_CutChain();
+        f32 *x = &sprite->pos.x;
+        *x += g_GameManager.arcadeRegionTopLeftPos.x;
+        f32 *y = &sprite->pos.y;
+        *y += g_GameManager.arcadeRegionTopLeftPos.y;
+        sprite->pos.z = 0.0;
+    };
+};
 
 extern Player g_Player;
-} // namespace th06

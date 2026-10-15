@@ -1,17 +1,42 @@
 #pragma once
+
 #include "Chain.hpp"
 #include "ChainPriorities.hpp"
 #include "ReplayData.hpp"
-#include "decomp.hpp"
+#include "inttypes.hpp"
 
-namespace th06
+struct ReplayManager
 {
-#define REPLAY_MAGIC "T6RP"
+    static ZunResult RegisterChain(i32 isDemo, const char *replayFile);
+    static ChainCallbackResult OnUpdate(ReplayManager *mgr);
+    static ChainCallbackResult OnUpdateDemoHighPrio(ReplayManager *mgr);
+    static ChainCallbackResult OnUpdateDemoLowPrio(ReplayManager *mgr);
+    static ChainCallbackResult OnDraw(ReplayManager *mgr);
+    static ZunResult AddedCallback(ReplayManager *mgr);
+    static ZunResult AddedCallbackDemo(ReplayManager *mgr);
+    static ZunResult DeletedCallback(ReplayManager *mgr);
+    static void StopRecording();
+    static void SaveReplay(const char *replay_path, char *param_2);
+    static ZunResult ValidateReplayData(const ReplayHeader *data, i32 fileSize);
 
-ZunResult ReplayManager_RegisterChain(ZunBool isDemo, const char *replayFile);
+    ReplayManager()
+    {
+    }
 
-void StopRecordingReplay();
-void SaveReplay(const char *replayPath, const char *replayName);
-ZunResult ValidateReplayData(ReplayData *data, i32 fileSize);
+    i32 IsDemo() const
+    {
+        return this->isDemo;
+    }
 
-} // namespace th06
+    i32 frameId;
+    ReplayData *replayData;
+    i32 isDemo;
+    const char *replayFile;
+    u8 unk10[52];
+    u16 unk44;
+    ReplayDataInput *replayInputs;
+    const ReplayDataInput *replayInputStageBookmarks[7];
+    ChainElem *calcChain;
+    ChainElem *drawChain;
+    ChainElem *calcChainDemoHighPrio;
+};
