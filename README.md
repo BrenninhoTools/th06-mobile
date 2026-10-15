@@ -24,6 +24,14 @@ Copy every file from your EoSD 1.02h folder (`紅魔郷CM.DAT`, `紅魔郷ED.DAT
 | iOS | the app's folder in the **Files** app (On My iPhone → th06) |
 
 Launch the app once first so the folder is created. A `PUT_GAME_FILES_HERE.txt` file is written there.
+On Android, if the files are missing, the app opens a setup screen that copies them from a folder you pick.
+
+## Crash reports (Android)
+
+On first launch the app asks for "All files access". With it, crash reports are saved to
+`/storage/emulated/0/.Touhou6/crash/crash_<date>.txt`. A watcher running in a separate process reads the app's
+logcat and writes the report (device info plus the surrounding log lines) when it sees a Java exception or a
+native crash. Without the permission the same folder is created inside `Android/data/com.brenninhotools.th06/files/`.
 
 Notes:
 
