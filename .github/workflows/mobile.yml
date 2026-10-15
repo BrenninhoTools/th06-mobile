@@ -54,11 +54,23 @@ jobs:
         env:
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
-        run: >
-          gradle assembleRelease --build-cache --parallel
-          -Pth06NdkVersion=$NDK_VER
-          -Pth06CmakeVersion=$CMAKE_VER
-          -Pth06Abis=arm64-v8a
+        run: |
+          set -o pipefail
+          gradle assembleRelease --build-cache --parallel \
+            -Pth06NdkVersion=$NDK_VER \
+            -Pth06CmakeVersion=$CMAKE_VER \
+            -Pth06Abis=arm64-v8a 2>&1 | tee ../build.log
+
+      - name: Report errors
+        if: failure()
+        run: |
+          grep -nE "error|Error|FAILED|What went wrong|undefined" build.log | grep -vE "warning|SDL_error|GameErrorContext|error\.(c|h)" | head -n 40 > errors.txt || true
+          tail -n 25 build.log >> errors.txt || true
+          split -l 6 errors.txt chunk_
+          for f in chunk_*; do
+            msg=$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::error::$msg"
+          done
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/release/app-release.apk th06-android-arm64.apk
@@ -91,18 +103,33 @@ jobs:
         run: command -v ninja || brew install ninja
 
       - name: Configure
-        run: >
-          cmake -S . -B build-ios -G Ninja
-          -DCMAKE_SYSTEM_NAME=iOS
-          -DCMAKE_OSX_ARCHITECTURES=arm64
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          -DCMAKE_OBJC_COMPILER_LAUNCHER=ccache
+        run: |
+          set -o pipefail
+          cmake -S . -B build-ios -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_OBJC_COMPILER_LAUNCHER=ccache 2>&1 | tee build.log
 
       - name: Build
-        run: cmake --build build-ios --target th06 --parallel
+        run: |
+          set -o pipefail
+          cmake --build build-ios --target th06 --parallel 2>&1 | tee -a build.log
+
+      - name: Report errors
+        if: failure()
+        run: |
+          grep -nE "error|Error|FAILED|What went wrong|undefined" build.log | grep -vE "warning|SDL_error|GameErrorContext|error\.(c|h)" | head -n 40 > errors.txt || true
+          tail -n 25 build.log >> errors.txt || true
+          split -l 6 errors.txt chunk_
+          for f in chunk_*; do
+            msg=$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::error::$msg"
+          done
 
       - name: Package IPA
         run: |

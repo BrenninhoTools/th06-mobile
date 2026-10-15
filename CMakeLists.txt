@@ -87,6 +87,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 
 if(TH06_VENDORED_SDL)
     include(FetchContent)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
     if(POLICY CMP0135)
         cmake_policy(SET CMP0135 NEW)
     endif()
