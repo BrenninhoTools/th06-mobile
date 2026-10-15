@@ -15,16 +15,36 @@ This repository does **not** contain any game assets. You need your own copy of 
 
 ## Installing the game files
 
-Copy every file from your EoSD 1.02h folder (`紅魔郷CM.DAT`, `紅魔郷ED.DAT`, `紅魔郷IN.DAT`, `紅魔郷MD.DAT`,
-`紅魔郷ST.DAT`, `紅魔郷TL.DAT`, and the `bgm` folder if you have it) into the game data folder:
+You need your own copy of EoSD 1.02h (`紅魔郷CM.DAT`, `紅魔郷ED.DAT`, `紅魔郷IN.DAT`, `紅魔郷MD.DAT`,
+`紅魔郷ST.DAT`, `紅魔郷TL.DAT`, and optionally the `bgm` folder). File names are matched loosely, so
+lower case, English or garbled names ending in `CM.DAT`, `ST.DAT`… work too.
 
-| Platform | Data folder |
-| --- | --- |
-| Android | `Android/data/com.brenninhotools.th06/files/` |
-| iOS | the app's folder in the **Files** app (On My iPhone → th06) |
+### Android
 
-Launch the app once first so the folder is created. A `PUT_GAME_FILES_HERE.txt` file is written there.
-On Android, if the files are missing, the app opens a setup screen that copies them from a folder you pick.
+Open the app. If it does not find the files it shows a setup screen with two options:
+
+- **Select game folder**: pick the EoSD folder (or any folder above it); the folder with `*CM.DAT` is found automatically.
+- **Select .zip**: pick a zip of the game; Shift-JIS file names are handled.
+
+Files are copied to `/storage/emulated/0/.Touhou6/` when "All files access" is granted, otherwise to
+`Android/data/com.brenninhotools.th06/files/`. You can also copy them there by hand.
+
+### iOS
+
+Copy the files into the app's folder in the **Files** app (On My iPhone → th06) and reopen the app.
+
+### Bundling your own copy (personal builds only)
+
+Put your game files in a `gamedata/` folder at the repository root (it is git-ignored) and build locally.
+The Android APK and the iOS app will then install the files on first launch.
+Never upload such a build or commit the files: the game data is copyrighted by Team Shanghai Alice.
+CI builds never include game data.
+
+Notes:
+
+- Music uses the WAV soundtrack (`bgm/th06_*.wav`). MIDI playback is not available on mobile.
+- Text uses `msgothic.ttc` or `NotoSansJP-Regular.ttf` from the data folder if present, otherwise a bundled
+  or system Japanese font.
 
 ## Crash reports (Android)
 

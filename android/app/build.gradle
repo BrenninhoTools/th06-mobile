@@ -83,6 +83,9 @@ tasks.register('copyTh06Assets', Copy) {
     from("${rootDir}/../fonts") {
         include '*.ttf', '*.otf', '*.ttc'
     }
+    from("${rootDir}/../gamedata") {
+        into 'gamedata'
+    }
     into "${buildDir}/generated/th06-assets"
 }
 

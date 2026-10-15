@@ -193,6 +193,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     file(GLOB TH06_EXTRA_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.otf")
     list(APPEND TH06_BUNDLE_RESOURCES ${TH06_EXTRA_FONTS})
     add_executable(th06 MACOSX_BUNDLE ${TH06_SOURCES})
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata")
+        add_custom_command(TARGET th06 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/gamedata" "$<TARGET_FILE_DIR:th06>/gamedata")
+    endif()
     foreach(resource ${TH06_BUNDLE_RESOURCES})
         add_custom_command(TARGET th06 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${resource}" "$<TARGET_FILE_DIR:th06>/")

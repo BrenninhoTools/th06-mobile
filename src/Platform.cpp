@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 #ifndef _WIN32
 #include <sys/stat.h>
@@ -31,10 +32,37 @@ static int SDLCALL LifecycleWatch(void *userdata, SDL_Event *e)
     return 0;
 }
 
+#if TH06_MOBILE && !defined(__ANDROID__)
+static void CopyBundledData()
+{
+    char *base = SDL_GetBasePath();
+    if (base == NULL)
+    {
+        return;
+    }
+    std::filesystem::path source = std::filesystem::path(base) / "gamedata";
+    SDL_free(base);
+
+    std::error_code ec;
+    if (!std::filesystem::is_directory(source, ec))
+    {
+        return;
+    }
+    std::filesystem::copy(source, std::filesystem::path(g_DataDir),
+                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_existing, ec);
+}
+#endif
+
 static void ComputeDataDir()
 {
 #if defined(__ANDROID__)
-    const char *dir = SDL_AndroidGetExternalStoragePath();
+    const char *dir = std::getenv("TH06_DATA_DIR");
+    if (dir != NULL && dir[0] != '\0')
+    {
+        g_DataDir = dir;
+        return;
+    }
+    dir = SDL_AndroidGetExternalStoragePath();
     if (dir == NULL)
     {
         dir = SDL_AndroidGetInternalStoragePath();
@@ -82,6 +110,13 @@ bool Platform::Init()
     }
     mkdir("bgm", 0755);
     mkdir("replay", 0755);
+#endif
+
+#if TH06_MOBILE && !defined(__ANDROID__)
+    if (!HasGameData())
+    {
+        CopyBundledData();
+    }
 #endif
 
     FILE *readme = FileSystem::FopenUTF8(c_ReadmeName, "rb");
