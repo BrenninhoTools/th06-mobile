@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
     (void)argv;
 
     i32 renderResult = 0;
+    bool startupFailed = false;
     //    MSG msg;
     //    i32 waste1, waste2, waste3, waste4, waste5, waste6;
 
@@ -99,6 +100,7 @@ restart:
 
     if (Supervisor::RegisterChain() != ZUN_SUCCESS)
     {
+        startupFailed = true;
         goto stop;
     }
     if (!g_Supervisor.cfg.windowed)
@@ -199,6 +201,12 @@ stop:
     //    SystemParametersInfo(SPI_SETPOWEROFFACTIVE, g_GameWindow.powerOffActive, NULL, SPIF_SENDCHANGE);
 
     SDL_ShowCursor(SDL_ENABLE);
+#if TH06_MOBILE
+    if (startupFailed)
+    {
+        g_GameErrorContext.m_ShowMessageBox = true;
+    }
+#endif
     g_GameErrorContext.Flush();
     return 0;
 }

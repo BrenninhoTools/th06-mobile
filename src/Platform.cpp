@@ -105,15 +105,12 @@ std::string Platform::DataPath(const char *name)
 {
     if (g_DataDir.empty() || name == NULL || name[0] == '/')
     {
-        return name != NULL ? name : "";
+        return FileSystem::ResolvePath(name);
     }
     std::string path = g_DataDir;
     path += '/';
-    for (const char *c = name; *c != '\0'; c++)
-    {
-        path += *c == '\\' ? '/' : *c;
-    }
-    return path;
+    path += name;
+    return FileSystem::ResolvePath(path.c_str());
 }
 
 bool Platform::HasGameData()

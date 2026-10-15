@@ -16,12 +16,147 @@
 #include "pbg3/Pbg3Archive.hpp"
 #include "utils.hpp"
 
+#ifndef _WIN32
+#include <cctype>
+#include <dirent.h>
+#include <string>
+#include <sys/stat.h>
+#endif
+
 u32 g_LastFileSize;
+
+#ifndef _WIN32
+static bool PathExists(const std::string &path)
+{
+    struct stat st;
+    return stat(path.c_str(), &st) == 0;
+}
+
+static std::string UpperAscii(const std::string &str)
+{
+    std::string out = str;
+    for (char &c : out)
+    {
+        c = (char)std::toupper((unsigned char)c);
+    }
+    return out;
+}
+
+static bool EndsWith(const std::string &str, const std::string &suffix)
+{
+    return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+static std::string FindEntry(const std::string &dir, const std::string &name, bool lastComponent)
+{
+    DIR *handle = opendir(dir.empty() ? "." : dir.c_str());
+    if (handle == NULL)
+    {
+        return "";
+    }
+
+    std::string wanted = UpperAscii(name);
+    std::string datSuffix;
+    if (lastComponent && wanted.size() >= 6 && EndsWith(wanted, ".DAT"))
+    {
+        datSuffix = wanted.substr(wanted.size() - 6);
+    }
+
+    std::string exact;
+    std::string suffixMatch;
+    struct dirent *entry;
+    while ((entry = readdir(handle)) != NULL)
+    {
+        std::string entryName = entry->d_name;
+        std::string upper = UpperAscii(entryName);
+        if (upper == wanted)
+        {
+            exact = entryName;
+            break;
+        }
+        if (!datSuffix.empty() && suffixMatch.empty() && EndsWith(upper, datSuffix))
+        {
+            suffixMatch = entryName;
+        }
+    }
+    closedir(handle);
+    return !exact.empty() ? exact : suffixMatch;
+}
+#endif
+
+std::string FileSystem::ResolvePath(const char *filepath)
+{
+    std::string path = filepath != NULL ? filepath : "";
+#ifndef _WIN32
+    for (char &c : path)
+    {
+        if (c == '\\')
+        {
+            c = '/';
+        }
+    }
+
+    if (path.empty() || PathExists(path))
+    {
+        return path;
+    }
+
+    std::string resolved;
+    std::size_t pos = 0;
+    if (path[0] == '/')
+    {
+        resolved = "/";
+        pos = 1;
+    }
+
+    while (pos <= path.size())
+    {
+        std::size_t next = path.find('/', pos);
+        bool last = next == std::string::npos;
+        std::string component = path.substr(pos, last ? std::string::npos : next - pos);
+        pos = last ? path.size() + 1 : next + 1;
+
+        if (component.empty() || component == ".")
+        {
+            continue;
+        }
+
+        std::string candidate = resolved;
+        if (!candidate.empty() && candidate.back() != '/')
+        {
+            candidate += '/';
+        }
+
+        if (component != ".." && !PathExists(candidate + component))
+        {
+            std::string found = FindEntry(resolved, component, last);
+            if (found.empty())
+            {
+                return path;
+            }
+            component = found;
+        }
+        resolved = candidate + component;
+    }
+    return resolved;
+#else
+    return path;
+#endif
+}
 
 FILE *FileSystem::FopenUTF8(const char *filepath, const char *mode)
 {
 #ifndef _WIN32
-    return std::fopen(filepath, mode);
+    FILE *file = std::fopen(filepath, mode);
+    if (file == NULL && mode != NULL && mode[0] == 'r')
+    {
+        std::string resolved = ResolvePath(filepath);
+        if (resolved != filepath)
+        {
+            file = std::fopen(resolved.c_str(), mode);
+        }
+    }
+    return file;
 #else
     u32 filepathWLen = MultiByteToWideChar(CP_UTF8, 0, filepath, -1, NULL, 0) * 2;
     u32 modeWLen = MultiByteToWideChar(CP_UTF8, 0, mode, -1, NULL, 0) * 2;

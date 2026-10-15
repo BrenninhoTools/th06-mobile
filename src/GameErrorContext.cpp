@@ -1,5 +1,6 @@
 #include "GameErrorContext.hpp"
 #include "FileSystem.hpp"
+#include <SDL2/SDL_log.h>
 #include <SDL2/SDL_messagebox.h>
 #include <cstdarg>
 #include <cstdio>
@@ -70,9 +71,13 @@ void GameErrorContext::Flush()
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "log", m_Buffer, NULL);
         }
 
-        logFile = FileSystem::FopenUTF8("./log.txt", "w");
+        SDL_Log("%s", m_Buffer);
 
-        std::fprintf(logFile, "%s", m_Buffer);
-        std::fclose(logFile);
+        logFile = FileSystem::FopenUTF8("./log.txt", "w");
+        if (logFile != NULL)
+        {
+            std::fprintf(logFile, "%s", m_Buffer);
+            std::fclose(logFile);
+        }
     }
 }
