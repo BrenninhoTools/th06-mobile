@@ -64,6 +64,7 @@ jobs:
               echo "::$3::$msg"
             done
           }
-          report native.txt native notice
+          report logcat-crash-setup.txt crashsetup error
+          report logcat-crash-game.txt crashgame error
           report logcat-setup.txt setup warning
-          report logcat-game.txt game error
+          report logcat-game.txt game notice
